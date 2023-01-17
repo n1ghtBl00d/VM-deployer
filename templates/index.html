@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>801Labs deploy VM test</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script type="text/javascript" src="/static/js/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" src="/static/js/socket.io.min.js"></script>
+    <script type="text/javascript" src="/static/js/backend.js"></script>
+
+    <style>
+        button {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>801Labs deploy VM test</h1>
+    <hr>
+    <div style="text-align: center;">
+        <div style="width: 50%; float: left;">
+            <button id="newVM">Make New VM</button><button id="newLXC">Make New LXC</button><br>
+            
+        </div>
+        <div style="width: 50%; float: right;">
+            <p id="output"></p>
+        </div>
+    </div>
+    <br>
+    <br>
+    <div id="vmListDiv">
+        <h4>Current VMs:</h4>
+        <button id="updateVmList">Update</button><button id="delAll">Delete All</button>
+        <ul id="vmList">
+
+        </ul>
+    </div>
+</body>
+
+</html>
