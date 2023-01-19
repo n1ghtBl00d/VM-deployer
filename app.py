@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, make_respo
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re
 
-from config import API_URL, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID
+from config import API_URL, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE
 
 ID_RANGE_LOWER = 300
 ID_RANGE_UPPER = 400
@@ -150,8 +150,14 @@ def getIP(vmid):
     lxcs = getLXCs()
     vms = getVMs()
     if vmid in lxcs:
-        command = "ssh proxmox lxc-ls -f | grep " + str(vmid)
-        ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
+        if SSH_ENABLE = True:
+            command = "ssh proxmox lxc-ls -f | grep " + str(vmid)
+            ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
+        else:
+            config = proxmox.nodes("proxmox").lxc(vmid).config.get()
+            mac = str(macPattern.search(str(config))[0])
+            command = "arp-scan -l | grep -i " + mac
+            ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
         return ipAddr
     if vmid in vms:
         config = proxmox.nodes("proxmox").qemu(vmid).config.get()
