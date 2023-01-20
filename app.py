@@ -150,7 +150,7 @@ def getIP(vmid):
     lxcs = getLXCs()
     vms = getVMs()
     if vmid in lxcs:
-        if SSH_ENABLE = True:
+        if SSH_ENABLE == True:
             command = "ssh proxmox lxc-ls -f | grep " + str(vmid)
             ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
         else:
