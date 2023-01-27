@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, make_respo
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re
 
-from config import API_URL, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE
+from config import API_URL, API_PORT, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE
 
 ID_RANGE_LOWER = 300
 ID_RANGE_UPPER = 400
@@ -14,12 +14,12 @@ macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
 
 
 proxmox = ProxmoxAPI(
-    API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=True, port='443'
+    API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=SSH_ENABLE, port=API_PORT
 )
 
 def getLXCs():
     lxcs = []
-    for lxc in proxmox.nodes("proxmox").lxc.get():
+    for lxc in proxmox.nodes(PROXMOX_NODE).lxc.get():
         lxcs.append(int(lxc["vmid"]))
     lxcs[:] = [x for x in lxcs if (x >= ID_RANGE_LOWER and x <= ID_RANGE_UPPER)]
     lxcs.sort()
@@ -27,7 +27,7 @@ def getLXCs():
 
 def getVMs():
     vms = []
-    for vm in proxmox.nodes("proxmox").qemu.get():
+    for vm in proxmox.nodes(PROXMOX_NODE).qemu.get():
         vms.append(int(vm["vmid"]))
     vms[:] = [x for x in vms if (x >= ID_RANGE_LOWER and x <= ID_RANGE_UPPER)]
     vms.sort()
@@ -48,89 +48,89 @@ def getNextId():
 def checkStatus(task_id, new_id):
     data = {"status": ""}
     while (data["status"] != "stopped"):
-        data = proxmox.nodes("proxmox").tasks(task_id).status.get()
+        data = proxmox.nodes(PROXMOX_NODE).tasks(task_id).status.get()
         socketio.emit("statusUpdate", {"status": data, "newID": new_id})
 
 def waitOnTask(task_id):
     data = {"status": ""}
     while (data["status"] != "stopped"):
-        data = proxmox.nodes("proxmox").tasks(task_id).status.get()
+        data = proxmox.nodes(PROXMOX_NODE).tasks(task_id).status.get()
 
 def createAndStartLXC(cloneid):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes("proxmox").lxc(cloneid).clone.post(newid=nextid, node="proxmox", vmid=cloneid)
+    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid)
     waitOnTask(cloneTask)
     print("created")
-    snapshotTask = proxmox.nodes("proxmox").lxc(nextid).snapshot.post(vmid=nextid, node="proxmox", snapname="initState")
+    snapshotTask = proxmox.nodes(PROXMOX_NODE).lxc(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
     waitOnTask(snapshotTask)
     socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
-    startTask = proxmox.nodes("proxmox").lxc(nextid).status.start.post(node="proxmox", vmid=nextid)
+    startTask = proxmox.nodes(PROXMOX_NODE).lxc(nextid).status.start.post(node=PROXMOX_NODE, vmid=nextid)
     waitOnTask(startTask)
     print("Started")
     time.sleep(10)
     socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
 
     ipAddr = getIP(nextid)
-    status = proxmox.nodes("proxmox").lxc(nextid).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).lxc(nextid).status.current.get()
     socketio.emit("vmListEntry", {"vmid": nextid, "name": status["name"], "status": status["status"], "ip": ipAddr})
 
 def createAndStartVM(cloneid):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes("proxmox").qemu(cloneid).clone.post(newid=nextid, node="proxmox", vmid=cloneid)
+    cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid)
     waitOnTask(cloneTask)
     print("created")
-    snapshotTask = proxmox.nodes("proxmox").qemu(nextid).snapshot.post(vmid=nextid, node="proxmox", snapname="initState")
+    snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
     waitOnTask(snapshotTask)
     socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
-    startTask = proxmox.nodes("proxmox").qemu(nextid).status.start.post(node="proxmox", vmid=nextid)
+    startTask = proxmox.nodes(PROXMOX_NODE).qemu(nextid).status.start.post(node=PROXMOX_NODE, vmid=nextid)
     waitOnTask(startTask)
     print("Started")
     time.sleep(30)
     socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
 
-    status = proxmox.nodes("proxmox").qemu(nextid).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).qemu(nextid).status.current.get()
     
     ipAddr = getIP(nextid) 
     socketio.emit("vmListEntry", {"vmid": nextid, "name": status["name"], "status": status["status"], "ip": ipAddr})
     
     
 def deleteLXC(delId):
-    status = proxmox.nodes("proxmox").lxc(delId).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).lxc(delId).status.current.get()
     if(status["status"] != "stopped"):
         socketio.emit("statusUpdate", {"status": "Shutting Down", "newID": delId})
-        shutdownTask = proxmox.nodes("proxmox").lxc(delId).status.stop.post(node="proxmox", vmid=delId)
+        shutdownTask = proxmox.nodes(PROXMOX_NODE).lxc(delId).status.stop.post(node=PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
     socketio.emit("statusUpdate", {"status": "Deleting", "newID": delId})
-    deleteTask = proxmox.nodes("proxmox").lxc(delId).delete()
+    deleteTask = proxmox.nodes(PROXMOX_NODE).lxc(delId).delete()
     waitOnTask(deleteTask)
     socketio.emit("statusUpdate", {"status": "Deleted", "newID": delId})
 
 def deleteVM(delId):
-    status = proxmox.nodes("proxmox").qemu(delId).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).qemu(delId).status.current.get()
     if(status["status"] != "stopped"):
         socketio.emit("statusUpdate", {"status": "Shutting Down", "newID": delId})
-        shutdownTask = proxmox.nodes("proxmox").qemu(delId).status.stop.post(node="proxmox", vmid=delId)
+        shutdownTask = proxmox.nodes(PROXMOX_NODE).qemu(delId).status.stop.post(node=PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
     socketio.emit("statusUpdate", {"status": "Deleting", "newID": delId})
-    deleteTask = proxmox.nodes("proxmox").qemu(delId).delete()
+    deleteTask = proxmox.nodes(PROXMOX_NODE).qemu(delId).delete()
     waitOnTask(deleteTask)
     socketio.emit("statusUpdate", {"status": "Deleted", "newID": delId})
 
 def shutdownLXC(delId):
-    status = proxmox.nodes("proxmox").lxc(delId).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).lxc(delId).status.current.get()
     if(status["status"] != "stopped"):
         socketio.emit("statusUpdate", {"status": "Shutting Down", "newID": delId})
-        shutdownTask = proxmox.nodes("proxmox").lxc(delId).status.stop.post(node="proxmox", vmid=delId)
+        shutdownTask = proxmox.nodes(PROXMOX_NODE).lxc(delId).status.stop.post(node=PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
     socketio.emit("statusUpdate", {"status": "Shutdown Complete", "newID": delId})
 
 def shutdownVM(delId):
-    status = proxmox.nodes("proxmox").qemu(delId).status.current.get()
+    status = proxmox.nodes(PROXMOX_NODE).qemu(delId).status.current.get()
     if(status["status"] != "stopped"):
         socketio.emit("statusUpdate", {"status": "Shutting Down", "newID": delId})
-        shutdownTask = proxmox.nodes("proxmox").qemu(delId).status.stop.post(node="proxmox", vmid=delId)
+        shutdownTask = proxmox.nodes(PROXMOX_NODE).qemu(delId).status.stop.post(node=PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
     socketio.emit("statusUpdate", {"status": "Shutdown Complete", "newID": delId})
 
@@ -154,13 +154,13 @@ def getIP(vmid):
             command = "ssh proxmox lxc-ls -f | grep " + str(vmid)
             ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
         else:
-            config = proxmox.nodes("proxmox").lxc(vmid).config.get()
+            config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).config.get()
             mac = str(macPattern.search(str(config))[0])
             command = "arp-scan -l | grep -i " + mac
             ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
         return ipAddr
     if vmid in vms:
-        config = proxmox.nodes("proxmox").qemu(vmid).config.get()
+        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
         command = "arp-scan -l | grep -i " + mac
         ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
@@ -175,7 +175,7 @@ socketio = SocketIO(app)
 @app.route("/")
 def hello_world():
     retString = "<p>LXCs:</p>"
-    for lxc in proxmox.nodes("proxmox").lxc.get():
+    for lxc in proxmox.nodes(PROXMOX_NODE).lxc.get():
         id = lxc["vmid"]
         name = lxc["name"]
         
@@ -211,7 +211,7 @@ def delAll(data):
 def updateAllStatus(data):
     lxcs = getLXCs()
     for lxc in lxcs:
-        status = proxmox.nodes("proxmox").lxc(lxc).status.current.get()
+        status = proxmox.nodes(PROXMOX_NODE).lxc(lxc).status.current.get()
         if status["status"] == "running":
             ipAddr = getIP(lxc)
         else:
@@ -219,7 +219,7 @@ def updateAllStatus(data):
         socketio.emit("vmListEntry", {"vmid": lxc, "name": status["name"], "status": status["status"], "ip": ipAddr})
     vms = getVMs()
     for vm in vms:
-        status = proxmox.nodes("proxmox").qemu(vm).status.current.get()
+        status = proxmox.nodes(PROXMOX_NODE).qemu(vm).status.current.get()
         if status["status"] == "running":
             ipAddr = getIP(vm)   
         else:
@@ -246,14 +246,14 @@ def revertState(data):
     lxcs = getLXCs()
     vms = getVMs()
     if vmid in lxcs:
-        revertTask = proxmox.nodes("proxmox").lxc(vmid).snapshot("initState").rollback.post(node="proxmox", vmid=vmid, snapname="initState")
+        revertTask = proxmox.nodes(PROXMOX_NODE).lxc(vmid).snapshot("initState").rollback.post(node=PROXMOX_NODE, vmid=vmid, snapname="initState")
         waitOnTask(revertTask)
-        startTask = proxmox.nodes("proxmox").lxc(vmid).status.start.post(node="proxmox", vmid=vmid)
+        startTask = proxmox.nodes(PROXMOX_NODE).lxc(vmid).status.start.post(node=PROXMOX_NODE, vmid=vmid)
         waitOnTask(startTask)
     if vmid in vms:
-        revertTask = proxmox.nodes("proxmox").qemu(vmid).snapshot("initState").rollback.post(node="proxmox", vmid=vmid, snapname="initState")
+        revertTask = proxmox.nodes(PROXMOX_NODE).qemu(vmid).snapshot("initState").rollback.post(node=PROXMOX_NODE, vmid=vmid, snapname="initState")
         waitOnTask(revertTask)
-        startTask = proxmox.nodes("proxmox").qemu(vmid).status.start.post(node="proxmox", vmid=vmid)
+        startTask = proxmox.nodes(PROXMOX_NODE).qemu(vmid).status.start.post(node=PROXMOX_NODE, vmid=vmid)
         waitOnTask(startTask)
     socketio.emit("statusUpdate", {"status": "Reverted to Initial State", "newID": vmid})
 
@@ -264,19 +264,19 @@ def revertState(data):
     lxcs = getLXCs()
     vms = getVMs()
     if vmid in lxcs:
-        status = proxmox.nodes("proxmox").lxc(vmid).status.current.get()
+        status = proxmox.nodes(PROXMOX_NODE).lxc(vmid).status.current.get()
         if status["status"] == "running":
-            restartTask = proxmox.nodes("proxmox").lxc(vmid).status.reboot.post(node="proxmox", vmid=vmid)
+            restartTask = proxmox.nodes(PROXMOX_NODE).lxc(vmid).status.reboot.post(node=PROXMOX_NODE, vmid=vmid)
             waitOnTask(restartTask)
         else:
-            startTask = proxmox.nodes("proxmox").lxc(vmid).status.start.post(node="proxmox", vmid=vmid)
+            startTask = proxmox.nodes(PROXMOX_NODE).lxc(vmid).status.start.post(node=PROXMOX_NODE, vmid=vmid)
             waitOnTask(startTask)    
     if vmid in vms:
-        status = proxmox.nodes("proxmox").qemu(vmid).status.current.get()
+        status = proxmox.nodes(PROXMOX_NODE).qemu(vmid).status.current.get()
         if status["status"] == "running":
-            restartTask = proxmox.nodes("proxmox").qemu(vmid).status.reboot.post(node="proxmox", vmid=vmid)
+            restartTask = proxmox.nodes(PROXMOX_NODE).qemu(vmid).status.reboot.post(node=PROXMOX_NODE, vmid=vmid)
             waitOnTask(restartTask)
         else:
-            startTask = proxmox.nodes("proxmox").qemu(vmid).status.start.post(node="proxmox", vmid=vmid)
+            startTask = proxmox.nodes(PROXMOX_NODE).qemu(vmid).status.start.post(node=PROXMOX_NODE, vmid=vmid)
             waitOnTask(startTask)
     socketio.emit("statusUpdate", {"status": "Rebooted", "newID": vmid})
