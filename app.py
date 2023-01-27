@@ -181,22 +181,8 @@ heartBeatThread.start()
 
 @app.route("/")
 def hello_world():
-    retString = "<p>LXCs:</p>"
-    for lxc in proxmox.nodes(PROXMOX_NODE).lxc.get():
-        id = lxc["vmid"]
-        name = lxc["name"]
-        
-        
-        retString += f"<p>{id}:  {name}</p>"
-    lxcs = getLXCs()
-    nextID = getNextId()
-    retString += f"<br /><p>{lxcs}</p>"
-    retString += f"<br /><p>{nextID}</p>"
-    return retString
-
-@app.route("/test")
-def test():
     return render_template('index.html')
+    
 
 @socketio.on("newVM")
 def newVM(data):
