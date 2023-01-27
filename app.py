@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, make_respo
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re
 
-from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE
+from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE, VM_POOL
 
 ID_RANGE_LOWER = 300
 ID_RANGE_UPPER = 400
@@ -59,7 +59,7 @@ def waitOnTask(task_id):
 def createAndStartLXC(cloneid):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid)
+    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL)
     waitOnTask(cloneTask)
     print("created")
     snapshotTask = proxmox.nodes(PROXMOX_NODE).lxc(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
@@ -78,7 +78,7 @@ def createAndStartLXC(cloneid):
 def createAndStartVM(cloneid):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid)
+    cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL)
     waitOnTask(cloneTask)
     print("created")
     snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
