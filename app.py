@@ -4,7 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, make_respo
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re
 
-from config import API_URL, API_PORT, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE
+from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE
 
 ID_RANGE_LOWER = 300
 ID_RANGE_UPPER = 400
@@ -14,7 +14,7 @@ macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
 
 
 proxmox = ProxmoxAPI(
-    API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=SSH_ENABLE, port=API_PORT
+    API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=SSL_VERIFY, port=API_PORT
 )
 
 def getLXCs():
