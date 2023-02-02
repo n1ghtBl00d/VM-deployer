@@ -11,5 +11,8 @@ SSH_ENABLE = False                      # Set to True if you have passwordless s
 
 VM_POOL = None                          # Leave as None unless you have configured a Pool and the associated permissions. If you have, put the name of the pool as a string
 
-VM_TEMPLATE_ID = 198                    # Proxmox ID of the template VM to be cloned
-LXC_TEMPLATE_ID = 199                   # Proxmox ID of the template LXC to be cloned
+TEMPLATE_RANGE_LOWER = 200              # Range of VMIDs to be treated as templates to clone from
+TEMPLATE_RANGE_UPPER = 299
+
+CLONE_RANGE_LOWER = 300                 # Range of VMIDs to create new clones in
+CLONE_RANGE_UPPER = 400

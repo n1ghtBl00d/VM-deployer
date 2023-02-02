@@ -4,14 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, make_respo
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re
 
-from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE, VM_POOL
-
-
-TEMPLATE_RANGE_LOWER = 200
-TEMPLATE_RANGE_UPPER = 299
-
-CLONE_RANGE_LOWER = 300
-CLONE_RANGE_UPPER = 400
+from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, SSH_ENABLE, PROXMOX_NODE, VM_POOL, TEMPLATE_RANGE_LOWER, TEMPLATE_RANGE_UPPER, CLONE_RANGE_LOWER, CLONE_RANGE_UPPER
 
 
 ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
