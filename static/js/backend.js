@@ -42,7 +42,12 @@ function cloneTemplate(){
 
 function delAll(){
     console.log("entered delAll");
-    socket.emit("delAll", "start");
+    if(confirm("Are your sure you want to delete all currently running VMs?")){
+        console.log("confirmed. Deleteing all");
+        socket.emit("delAll", "start");
+    }else{
+        console.log("Cancelled");
+    }
 }
 
 function updateStatus(){
