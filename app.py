@@ -111,7 +111,7 @@ def createAndStartLXC(cloneid, name="default"):
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
     if(name == "default"):
         name = getNameLXC(cloneid)
-        name = name.replace(" ", "-").replace(":", "")
+        name = name.strip().replace(" ", "-").replace(":", "")
     cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
@@ -133,7 +133,7 @@ def createAndStartVM(cloneid, name="default"):
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
     if(name == "default"):
         name = getNameVM(cloneid)
-        name = name.replace(" ", "-").replace(":", "")
+        name = name.strip().replace(" ", "-").replace(":", "")
     cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
