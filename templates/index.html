@@ -20,7 +20,14 @@
     <hr>
     <div style="text-align: center;">
         <div style="width: 50%; float: left;">
-            <button id="newVM">Make New VM</button><button id="newLXC">Make New LXC</button><br>
+            <div hidden="true"><button id="newVM">Make New VM</button><button id="newLXC">Make New LXC</button><br></div>
+            <label for="templates">Choose a template:</label>
+            <select name="templates" id="templatesDDL">
+                <option value="NULL">Please Select a template to clone</option>
+            </select>
+            <button id="cloneTemplate">Clone</button>
+            <br />
+            <span id="ddlWarning" style="color: red;"></span>
             
         </div>
         <div style="width: 50%; float: right;">

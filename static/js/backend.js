@@ -2,6 +2,7 @@ window.timer = 0;
 
 const socket = io()
 var vmList;
+var templateList
 
 document.addEventListener('DOMContentLoaded', function(){
 
@@ -11,8 +12,12 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('newLXC').addEventListener("click", newLXC);
     document.getElementById('delAll').addEventListener("click", delAll);
     document.getElementById('updateVmList').addEventListener("click", updateStatus);
+    document.getElementById('cloneTemplate').addEventListener("click", cloneTemplate);
     vmList = document.getElementById('vmList');
+    templateList = document.getElementById('templatesDDL');
+    socket.emit("getTemplates", "get");
     updateStatus()
+    
 });
 
 function newVM(){
@@ -23,10 +28,27 @@ function newLXC(){
     console.log("entered newLXC");
     socket.emit("newLXC", "start");
 }
+function cloneTemplate(){
+    console.log("entered cloneTemplate");
+    var selectedValue = $("#templatesDDL").val();
+    console.log(selectedValue);
+    if(selectedValue == "NULL"){
+        $("#ddlWarning").text("Please select a Template from the list");
+    }else{
+        socket.emit("cloneTemplate", selectedValue);
+        $("#ddlWarning").text("");
+    }
+}
 
 function delAll(){
     console.log("entered delAll");
     socket.emit("delAll", "start");
+}
+
+function updateStatus(){
+    console.log("updateStatus");
+    vmList.innerHTML = "";
+    socket.emit("updateAllStatus", "start");
 }
 
 socket.on("statusUpdate", (data) => {
@@ -44,11 +66,13 @@ socket.on("vmListEntry", (data) => {
         data.vmid +"'>Reboot</button><button class='revertVM' data-vmid='" + data.vmid +"'>Revert</button>"
 });
 
-function updateStatus(){
-    console.log("updateStatus");
-    vmList.innerHTML = "";
-    socket.emit("updateAllStatus", "start");
-}
+socket.on("TemplateList", (data) => {
+    console.log("TemplateList");
+    console.log(data);
+    data.forEach(element => {
+        templateList.innerHTML += "<option value='" + element.vmid +"'>" + element.name + "</option>"
+    });
+});
 
 $(document).on("click", ".delVM", function(){
     var vmid = $(this).data('vmid')

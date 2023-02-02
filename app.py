@@ -6,8 +6,13 @@ import threading, os, time, subprocess, re
 
 from config import API_URL, API_PORT, SSL_VERIFY, API_USERNAME, API_PASSWORD, VM_TEMPLATE_ID, LXC_TEMPLATE_ID, SSH_ENABLE, PROXMOX_NODE, VM_POOL
 
-ID_RANGE_LOWER = 300
-ID_RANGE_UPPER = 400
+
+TEMPLATE_RANGE_LOWER = 200
+TEMPLATE_RANGE_UPPER = 299
+
+CLONE_RANGE_LOWER = 300
+CLONE_RANGE_UPPER = 400
+
 
 ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
 macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
@@ -25,7 +30,7 @@ def getLXCs():
     lxcs = []
     for lxc in proxmox.nodes(PROXMOX_NODE).lxc.get():
         lxcs.append(int(lxc["vmid"]))
-    lxcs[:] = [x for x in lxcs if (x >= ID_RANGE_LOWER and x <= ID_RANGE_UPPER)]
+    lxcs[:] = [x for x in lxcs if (x >= CLONE_RANGE_LOWER and x <= CLONE_RANGE_UPPER)]
     lxcs.sort()
     return lxcs
 
@@ -33,18 +38,59 @@ def getVMs():
     vms = []
     for vm in proxmox.nodes(PROXMOX_NODE).qemu.get():
         vms.append(int(vm["vmid"]))
-    vms[:] = [x for x in vms if (x >= ID_RANGE_LOWER and x <= ID_RANGE_UPPER)]
+    vms[:] = [x for x in vms if (x >= CLONE_RANGE_LOWER and x <= CLONE_RANGE_UPPER)]
     vms.sort()
     return vms
+
+def getTemplateLXCs():
+    lxcs = []
+    for lxc in proxmox.nodes(PROXMOX_NODE).lxc.get():
+        lxcs.append(int(lxc["vmid"]))
+    lxcs[:] = [x for x in lxcs if (x >= TEMPLATE_RANGE_LOWER and x <= TEMPLATE_RANGE_UPPER)]
+    lxcs.sort()
+    return lxcs
+
+def getTemplateVMs():
+    vms = []
+    for vm in proxmox.nodes(PROXMOX_NODE).qemu.get():
+        vms.append(int(vm["vmid"]))
+    vms[:] = [x for x in vms if (x >= TEMPLATE_RANGE_LOWER and x <= TEMPLATE_RANGE_UPPER)]
+    vms.sort()
+    return vms
+
+def getNameLXC(vmid):
+    config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).config.get()
+    description = config["description"]
+    name = description.partition('\n')[0][2:]
+    print(name)
+    return name
+
+def getNameVM(vmid):
+    config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config.get()
+    description = config["description"]
+    name = description.partition('\n')[0][2:]
+    print(name)
+    return name
+
+def getAllTemplates():
+    templates = []
+    lxcs = getTemplateLXCs()
+    vms = getTemplateVMs()
+    for lxc in lxcs:
+        templates.append({"vmid": lxc, "name": getNameLXC(lxc)})
+    for vm in vms:
+        templates.append({"vmid": vm, "name": getNameVM(vm)})
+    socketio.emit("TemplateList", templates)
+
 
 def getNextId():
     lxcs = getLXCs()
     vms = getVMs()
     ids = lxcs + vms
     if (ids == []):
-        return ID_RANGE_LOWER
+        return CLONE_RANGE_LOWER
     else:
-        for x in range(ID_RANGE_LOWER, ID_RANGE_UPPER):
+        for x in range(CLONE_RANGE_LOWER, CLONE_RANGE_UPPER):
             if x not in ids:
                 return x
 
@@ -60,10 +106,13 @@ def waitOnTask(task_id):
     while (data["status"] != "stopped"):
         data = proxmox.nodes(PROXMOX_NODE).tasks(task_id).status.get()
 
-def createAndStartLXC(cloneid):
+def createAndStartLXC(cloneid, name="default"):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL)
+    if(name == "default"):
+        name = getNameLXC(cloneid)
+        name = name.replace(" ", "-").replace(":", "")
+    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
     snapshotTask = proxmox.nodes(PROXMOX_NODE).lxc(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
@@ -79,10 +128,13 @@ def createAndStartLXC(cloneid):
     status = proxmox.nodes(PROXMOX_NODE).lxc(nextid).status.current.get()
     socketio.emit("vmListEntry", {"vmid": nextid, "name": status["name"], "status": status["status"], "ip": ipAddr})
 
-def createAndStartVM(cloneid):
+def createAndStartVM(cloneid, name="default"):
     nextid = getNextId()
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL)
+    if(name == "default"):
+        name = getNameVM(cloneid)
+        name = name.replace(" ", "-").replace(":", "")
+    cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
     snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
@@ -182,7 +234,10 @@ heartBeatThread.start()
 @app.route("/")
 def hello_world():
     return render_template('index.html')
-    
+
+@socketio.on("getTemplates")
+def getTemplates(data):
+    getAllTemplates()
 
 @socketio.on("newVM")
 def newVM(data):
@@ -194,6 +249,15 @@ def newVM(data):
     createThread = threading.Thread(target=createAndStartLXC, args=[LXC_TEMPLATE_ID])
     createThread.start()
 
+@socketio.on("cloneTemplate")
+def cloneTemplate(data):
+    id = int(data)
+    lxcs = getTemplateLXCs()
+    if id in lxcs:
+        createThread = threading.Thread(target=createAndStartLXC, args=[id])
+    else:
+        createThread = threading.Thread(target=createAndStartVM, args=[id])
+    createThread.start()
 
 @socketio.on("delAll")
 def delAll(data):
