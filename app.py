@@ -239,16 +239,6 @@ def hello_world():
 def getTemplates(data):
     getAllTemplates()
 
-@socketio.on("newVM")
-def newVM(data):
-    createThread = threading.Thread(target=createAndStartVM, args=[VM_TEMPLATE_ID])
-    createThread.start()
-
-@socketio.on("newLXC")
-def newVM(data):
-    createThread = threading.Thread(target=createAndStartLXC, args=[LXC_TEMPLATE_ID])
-    createThread.start()
-
 @socketio.on("cloneTemplate")
 def cloneTemplate(data):
     id = int(data)

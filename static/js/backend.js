@@ -7,9 +7,6 @@ var templateList
 document.addEventListener('DOMContentLoaded', function(){
 
     console.log("Loaded Socket")
-    // document.getElementById('ResetRobotLib').addEventListener('click', resetRobotLib)
-    document.getElementById('newVM').addEventListener("click", newVM);
-    document.getElementById('newLXC').addEventListener("click", newLXC);
     document.getElementById('delAll').addEventListener("click", delAll);
     document.getElementById('updateVmList').addEventListener("click", updateStatus);
     document.getElementById('cloneTemplate').addEventListener("click", cloneTemplate);
@@ -20,14 +17,6 @@ document.addEventListener('DOMContentLoaded', function(){
     
 });
 
-function newVM(){
-    console.log("entered newVM");
-    socket.emit("newVM", "start");
-}
-function newLXC(){
-    console.log("entered newLXC");
-    socket.emit("newLXC", "start");
-}
 function cloneTemplate(){
     console.log("entered cloneTemplate");
     var selectedValue = $("#templatesDDL").val();
