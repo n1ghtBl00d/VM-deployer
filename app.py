@@ -65,6 +65,17 @@ def getNameVM(vmid):
     print(name)
     return name
 
+def clean_string(string):
+    cleaned = []
+    for char in string:
+        if char.isalnum():
+            cleaned.append(char)
+        elif char.isspace():
+            cleaned.append("-")
+        elif (char == '.'):
+            cleaned.append(char)
+    return "".join(cleaned)
+
 def getAllTemplates():
     templates = []
     lxcs = getTemplateLXCs()
@@ -104,7 +115,7 @@ def createAndStartLXC(cloneid, name="default"):
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
     if(name == "default"):
         name = getNameLXC(cloneid)
-        name = name.strip().replace(" ", "-").replace(":", "")
+    name = clean_string(name.strip())
     cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
@@ -126,7 +137,7 @@ def createAndStartVM(cloneid, name="default"):
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
     if(name == "default"):
         name = getNameVM(cloneid)
-        name = name.strip().replace(" ", "-").replace(":", "")
+    name = clean_string(name.strip())
     cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
     waitOnTask(cloneTask)
     print("created")
