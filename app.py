@@ -116,7 +116,7 @@ def createAndStartLXC(cloneid, name="default"):
     if(name == "default"):
         name = getNameLXC(cloneid)
     name = clean_string(name.strip())
-    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
+    cloneTask = proxmox.nodes(PROXMOX_NODE).lxc(cloneid).clone.post(newid=nextid, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, hostname=name)
     waitOnTask(cloneTask)
     print("created")
     snapshotTask = proxmox.nodes(PROXMOX_NODE).lxc(nextid).snapshot.post(vmid=nextid, node=PROXMOX_NODE, snapname="initState")
