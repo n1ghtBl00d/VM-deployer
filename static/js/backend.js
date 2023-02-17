@@ -1,8 +1,8 @@
 window.timer = 0;
 
 const socket = io()
-var vmList;
-var templateList
+var vmTable;
+var templateList;
 
 document.addEventListener('DOMContentLoaded', function(){
 
@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('delAll').addEventListener("click", delAll);
     document.getElementById('updateVmList').addEventListener("click", updateStatus);
     document.getElementById('cloneTemplate').addEventListener("click", cloneTemplate);
-    vmList = document.getElementById('vmList');
+    vmTable = document.getElementById('vmTable');
     templateList = document.getElementById('templatesDDL');
     socket.emit("getTemplates", "get");
     updateStatus()
@@ -41,7 +41,7 @@ function delAll(){
 
 function updateStatus(){
     console.log("updateStatus");
-    vmList.innerHTML = "";
+    vmTable.innerHTML = "<tr><th style='width: 10%;'>ID</th><th style='width: 20%;'>Name</th><th style='width: 20%;'>Status</th><th style='width: 20%;'>IP Address</th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th></tr>";
     socket.emit("updateAllStatus", "start");
 }
 
@@ -54,10 +54,10 @@ socket.on("statusUpdate", (data) => {
 
 socket.on("vmListEntry", (data) => {
     console.log("vmListEntry");
-    vmList.innerHTML += "<li id='VM" + data.vmid + "'><span>ID: " + data.vmid +"</span> - <span>Name: " + 
-        data.name + "</span> - <span>Status: " + data.status +"</span> - <span>IP: " + data.ip + 
-        "</span> <button class='delVM' data-vmid='" + data.vmid +"'>Delete</button><button class='rebootVM' data-vmid='" + 
-        data.vmid +"'>Reboot</button><button class='revertVM' data-vmid='" + data.vmid +"'>Revert</button>"
+    vmTable.innerHTML += "<tr id='VM" + data.vmid + "'><td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
+        data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
+        "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
+        "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td></tr>"
 });
 
 socket.on("TemplateList", (data) => {

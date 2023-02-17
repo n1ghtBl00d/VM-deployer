@@ -8,11 +8,24 @@
     <script type="text/javascript" src="/static/js/socket.io.min.js"></script>
     <script type="text/javascript" src="/static/js/backend.js"></script>
 
-    <style>
+    <style type="text/css" media="screen">
+
+        table{
+        border-collapse:collapse;
+        border:1px solid #000;
+        }
+        
+        table td{
+        border:1px solid #000;
+        }
+        table th{
+        border:1px solid #000;
+        }
+
         button {
             margin-right: 10px;
         }
-    </style>
+        </style>
 </head>
 
 <body>
@@ -35,12 +48,23 @@
     </div>
     <br>
     <br>
-    <div id="vmListDiv">
-        <h4>Current VMs:</h4>
+    <div id="vmListDiv" style="width: 80vw; margin-left: 10vw;">
+        <h3>Current VMs:</h3>
         <button id="updateVmList">Update</button><button id="delAll">Delete All</button>
-        <ul id="vmList">
-
-        </ul>
+        <br style="margin-bottom: 10px"/>
+        <table style="width: 100%; text-align: center;" >
+            <tbody id="vmTable">
+                <tr>
+                    <th style="width: 10%;">ID</th>
+                    <th style="width: 20%;">Name</th>
+                    <th style="width: 20%;">Status</th>
+                    <th style="width: 20%;">IP Address</th>
+                    <th style="width: 10%;"></th>
+                    <th style="width: 10%;"></th>
+                    <th style="width: 10%;"></th>
+                </tr>
+            </tbody>
+        </table>
     </div>
 </body>
 
