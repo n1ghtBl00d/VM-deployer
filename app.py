@@ -18,6 +18,8 @@ proxmox = ProxmoxAPI(
 def heartBeat():
     proxmox.nodes.get()
     print("heartbeat")
+    heartBeatThread = threading.Timer(3600, heartBeat)
+    heartBeatThread.start()
 
 def getLXCs():
     lxcs = []
@@ -232,8 +234,9 @@ def getIP(vmid):
 app = Flask(__name__)
 socketio = SocketIO(app)
 
-heartBeatThread = threading.Timer(3600, heartBeat)
-heartBeatThread.start()
+
+heartBeat()
+
 
 @app.route("/")
 def hello_world():
