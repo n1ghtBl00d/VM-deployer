@@ -54,10 +54,22 @@ socket.on("statusUpdate", (data) => {
 
 socket.on("vmListEntry", (data) => {
     console.log("vmListEntry");
-    vmTable.innerHTML += "<tr id='VM" + data.vmid + "'><td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
-        data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
-        "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
-        "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td></tr>"
+    var entryData = "<td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
+    data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
+    "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
+    "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td>"
+
+    var foundMatch = 0;
+    currentEntries = document.querySelectorAll('[id^="VM"]')
+    currentEntries.forEach(entry => {
+        if(entry.id.includes(data.vmid)){
+            entry.innerHTML = entryData;
+            foundMatch = 1;
+        }
+    });
+    if(foundMatch == 0){
+        vmTable.innerHTML += "<tr id='VM" + data.vmid + "'>" + entryData + "</tr>"
+    }
 });
 
 socket.on("TemplateList", (data) => {
