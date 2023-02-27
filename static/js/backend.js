@@ -53,14 +53,10 @@ socket.on("statusUpdate", (data) => {
 });
 
 socket.on("vmListEntry", (data) => {
-    console.log("vmListEntry");
-    console.log(data)
-    console.log(data.vncStatus)
     vncButton = ""
-    if(data.vncStatus == true){
+    if(data.vncStatus == true && data.status != "stopped"){
         vncButton = "<a href='/vnc?vmid=" + data.vmid +"' target='_blank'><button>VNC</button></a>"
     }
-    console.log(vncButton)
     var entryData = "<td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
     data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
     "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
