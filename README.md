@@ -11,5 +11,7 @@ Developed for [801Labs](801labs.org) to deploy Virtual Machines and Containers f
     * Proxmoxer
 * arp-scan
 * A user with admin permissions in Proxmox (I created bot@pve)
-* Two templates set up on Proxmox - 1 LXC and 1 VM
-* Key-based SSH access to the Proxmox server (**optional** - speeds up discovery of IP addresses of LXC containers)
+* Templates to clone from
+    * Must have a description. The first line must be a MarkDown header with the name of the template (e.g. `# Test Template`)
+* (Optional) A noVNC server for remote desktop access (I use [this docker container](https://hub.docker.com/r/geek1011/easy-novnc))
+    * Add `[!ENABLE_VNC]` somewhere in the description to enable VNC access for a VM (Doesn't work for LXC containers)

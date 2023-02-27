@@ -2,7 +2,7 @@ from flask import Flask
 from flask_socketio import SocketIO
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
 
-import threading, os, time, subprocess, re
+import threading, os, time, subprocess, re, secrets
 
 from api import *
 
@@ -17,11 +17,13 @@ def updateStatusWrapper(vmid):
     vms = getVMs()
     status = ""
     ipAddr = ""
+    vncEnabled = False
     if vmid in lxcs:
         status, ipAddr = updateStatusLXC(vmid)
     if vmid in vms:
-        status, ipAddr = updateStatusVM(vmid)
-    socketio.emit("vmListEntry", {"vmid": vmid, "name": status["name"], "status": status["status"], "ip": ipAddr})    
+        status, ipAddr, vncEnabled = updateStatusVM(vmid)
+    #print(f"statusUpdate: {vmid} is {status['name']} - {ipAddr}")
+    socketio.emit("vmListEntry", {"vmid": vmid, "name": status["name"], "status": status["status"], "ip": ipAddr, "vncStatus": vncEnabled})    
     
 
 
@@ -29,9 +31,30 @@ def updateStatusWrapper(vmid):
 def hello_world():
     return render_template('index.html')
 
+@app.route("/vnc")
+def vncConnect():
+    vmid = int(request.args.get("vmid"))
+    ports = getVNCports()
+    if(vmid == None):
+        return redirect("/")
+    
+    for entry in ports:
+        if entry["vmid"] == vmid:
+            port = entry["port"] + 5900
+            break
+    else: #If no break in For loop (No matching entry in ports)
+        return redirect("/")
+
+    PASSWORD = secrets.token_urlsafe(8)
+    VNC_REDIRECT_URL = f"http://{CONFIG.NOVNC_IP}:{CONFIG.NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&show_dot=true&"
+    setVNCPassword(vmid, PASSWORD)
+    return redirect(f"{VNC_REDIRECT_URL}path=vnc%2F{CONFIG.PROXMOX_IP}%2F{port}&password={PASSWORD}")
+
+
+    
+
 @socketio.on("getTemplates")
 def getTemplates(data):
-    print("getTemplates")
     templates = getAllTemplates()
     socketio.emit("TemplateList", templates)
 
@@ -83,12 +106,9 @@ def updateAllStatus(data):
 
 @socketio.on("deleteVM")
 def handleDelete(data):
-    print(f'data: {data}')
     vmid = data['vmid']
-    print(f'vmid: {vmid}')
     lxcs = getLXCs()
     vms = getVMs()
-    print("got lists")
     if vmid in lxcs:
         deleteLXC(vmid)
     if vmid in vms:

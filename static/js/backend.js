@@ -41,7 +41,7 @@ function delAll(){
 
 function updateStatus(){
     console.log("updateStatus");
-    vmTable.innerHTML = "<tr><th style='width: 10%;'>ID</th><th style='width: 20%;'>Name</th><th style='width: 20%;'>Status</th><th style='width: 20%;'>IP Address</th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th></tr>";
+    vmTable.innerHTML = "<tr><th style='width: 10%;'>ID</th><th style='width: 20%;'>Name</th><th style='width: 10%;'>Status</th><th style='width: 20%;'>IP Address</th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th></tr>";
     socket.emit("updateAllStatus", "start");
 }
 
@@ -54,10 +54,17 @@ socket.on("statusUpdate", (data) => {
 
 socket.on("vmListEntry", (data) => {
     console.log("vmListEntry");
+    console.log(data)
+    console.log(data.vncStatus)
+    vncButton = ""
+    if(data.vncStatus == true){
+        vncButton = "<a href='/vnc?vmid=" + data.vmid +"' target='_blank'><button>VNC</button></a>"
+    }
+    console.log(vncButton)
     var entryData = "<td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
     data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
     "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
-    "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td>"
+    "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td><td>" + vncButton + "</td>"
 
     var foundMatch = 0;
     currentEntries = document.querySelectorAll('[id^="VM"]')
