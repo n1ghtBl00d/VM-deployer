@@ -128,14 +128,10 @@ def getIP(vmid):
     lxcs = getLXCs()
     vms = getVMs()
     if vmid in lxcs:
-        if config.SSH_ENABLE == True:
-            command = "ssh proxmox lxc-ls -f | grep " + str(vmid)
-            ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
-        else:
-            config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
-            mac = str(macPattern.search(str(config))[0])
-            command = "arp-scan -l | grep -i " + mac
-            ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
+        config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
+        mac = str(macPattern.search(str(config))[0])
+        command = "arp-scan -l | grep -i " + mac
+        ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
         return ipAddr
     if vmid in vms:
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).config.get()
