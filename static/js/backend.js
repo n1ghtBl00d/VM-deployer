@@ -60,7 +60,7 @@ socket.on("vmListEntry", (data) => {
     var entryData = "<td>" + data.vmid + "</td><td>" + data.name + "</td><td>" + 
     data.status + "</td><td>" + data.ip + "</td><td><button class='delVM' data-vmid='" + data.vmid +"'>Delete</button></td>" +
     "</td><td><button class='rebootVM' data-vmid='" + data.vmid +"'>Reboot</button></td>" +
-    "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Reboot</button></td><td>" + vncButton + "</td>"
+    "</td><td><button class='revertVM' data-vmid='" + data.vmid +"'>Revert</button></td><td>" + vncButton + "</td>"
 
     var foundMatch = 0;
     currentEntries = document.querySelectorAll('[id^="VM"]')
