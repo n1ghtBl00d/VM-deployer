@@ -1,10 +1,12 @@
 from flask import Flask
 from flask_socketio import SocketIO
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
+from ratelimit import limits, sleep_and_retry, RateLimitException
 
-import threading, os, time, subprocess, re, secrets
+import threading, os, time, subprocess, re, secrets, datetime
 
 from api import *
+
 
 app = Flask(__name__)
 socketio = SocketIO(app) 
@@ -13,6 +15,8 @@ statusCache = []
 
 heartBeat()
 
+@sleep_and_retry
+@limits(calls=3, period=10) # Max 3 calls per 10 seconds
 def updateStatusWrapper(vmid):
     lxcs = getLXCs()
     vms = getVMs()
@@ -21,8 +25,32 @@ def updateStatusWrapper(vmid):
         statusEntry = updateStatusLXC(vmid)
     if vmid in vms:
         statusEntry = updateStatusVM(vmid)
-    socketio.emit("vmListEntry", {"vmid": statusEntry["vmid"], "name": statusEntry["name"], "status": statusEntry["status"], "ip": statusEntry["ipAddr"], "vncStatus": statusEntry["vncStatus"]})    
+    socketio.emit("vmListEntry", {"vmid": statusEntry["vmid"], "name": statusEntry["name"], "status": statusEntry["status"], "ip": statusEntry["ipAddr"], "vncStatus": statusEntry["vncStatus"]})
+
+    for entry in statusCache:
+        if (entry["vmid"] == vmid):
+            entry["statusEntry"] = statusEntry
+            entry["updateTime"] = datetime.datetime.now()
+            break
+        else:
+            statusCache.append({
+                "vmid": vmid,
+                "statusEntry": statusEntry,
+                "updateTime": datetime.datetime.now()
+            })
     
+def updateStatusCached(vmid):
+    for entry in statusCache:
+        if (entry["vmid"] == vmid):
+            if (entry["updateTime"] < datetime.datetime.now()-datetime.timedelta(minutes=60)):
+                updateStatusWrapper(vmid)
+            else:
+                statusEntry = entry["statusEntry"]
+                socketio.emit("vmListEntry", {"vmid": statusEntry["vmid"], "name": statusEntry["name"], "status": statusEntry["status"], "ip": statusEntry["ipAddr"], "vncStatus": statusEntry["vncStatus"]})
+            break
+    else:
+        updateStatusWrapper(vmid)
+  
 
 
 @app.route("/")
@@ -96,13 +124,22 @@ def updateAllStatus(data):
     lxcs = getLXCs()
     vms = getVMs()
     for lxc in lxcs:
+        statusThread = threading.Thread(target=updateStatusCached, args=[lxc])
+        statusThread.start()
+    for vm in vms:
+        statusThread = threading.Thread(target=updateStatusCached, args=[vm])
+        statusThread.start()
+
+@socketio.on("ForceUpdateAllStatus")
+def updateAllStatus(data):
+    lxcs = getLXCs()
+    vms = getVMs()
+    for lxc in lxcs:
         statusThread = threading.Thread(target=updateStatusWrapper, args=[lxc])
         statusThread.start()
-        time.sleep(2)
     for vm in vms:
         statusThread = threading.Thread(target=updateStatusWrapper, args=[vm])
         statusThread.start()
-        time.sleep(2)
 
 @socketio.on("deleteVM")
 def handleDelete(data):
