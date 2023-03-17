@@ -32,12 +32,12 @@ def updateStatusWrapper(vmid):
             entry["statusEntry"] = statusEntry
             entry["updateTime"] = datetime.datetime.now()
             break
-        else:
-            statusCache.append({
-                "vmid": vmid,
-                "statusEntry": statusEntry,
-                "updateTime": datetime.datetime.now()
-            })
+    else:
+        statusCache.append({
+            "vmid": vmid,
+            "statusEntry": statusEntry,
+            "updateTime": datetime.datetime.now()
+        })
     
 def updateStatusCached(vmid):
     for entry in statusCache:
