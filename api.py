@@ -138,9 +138,9 @@ def getIP(vmid):
     if vmid in vms:
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
-    return findIPbyMac(mac)
+    return findIPbyMAC(mac)
 
-def findIPbyMac(mac):
+def findIPbyMAC(mac):
     mac = mac.lower()
     now = datetime.datetime.now()
     if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
