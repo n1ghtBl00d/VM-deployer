@@ -98,9 +98,11 @@ def updateAllStatus(data):
     for lxc in lxcs:
         statusThread = threading.Thread(target=updateStatusWrapper, args=[lxc])
         statusThread.start()
+        time.sleep(2)
     for vm in vms:
         statusThread = threading.Thread(target=updateStatusWrapper, args=[vm])
         statusThread.start()
+        time.sleep(2)
 
 @socketio.on("deleteVM")
 def handleDelete(data):
