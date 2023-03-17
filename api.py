@@ -1,6 +1,7 @@
-from proxmoxer import ProxmoxAPI
-import threading, os, time, subprocess, re, urllib.parse, datetime
+from proxmoxer import ProxmoxAPI, core
+import threading, os, time, subprocess, re, urllib.parse, datetime, requests
 from ratelimit import limits, sleep_and_retry, RateLimitException
+import backoff
 
 import config as CONFIG 
 
@@ -207,6 +208,7 @@ def updateStatusVM(vm):
     }
     return statusEntry
 
+@backoff.on_exception(backoff.constant, requests.exceptions.ReadTimeout, interval=10, max_tries = 5)
 @sleep_and_retry
 @limits(calls=1, period=30) #Max 1 call per 30 seconds
 def createLXC(cloneid, newId, name="default"):
@@ -219,6 +221,7 @@ def createLXC(cloneid, newId, name="default"):
     waitOnTask(snapshotTask)
     return newId
 
+@backoff.on_exception(backoff.expo, (requests.exceptions.ReadTimeout, requests.exceptions.ReadTimeout), max_tries = 5)
 @sleep_and_retry
 @limits(calls=1, period=30) #Max 1 call per 30 seconds
 def createVM(cloneid, newId, name="default", vnc=None):
@@ -227,13 +230,17 @@ def createVM(cloneid, newId, name="default", vnc=None):
     name = clean_string(name.strip())
     if(vnc == None):
         vnc = checkTemplateVNC(cloneid)
-    cloneTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(cloneid).clone.post(newid=newId, node=CONFIG.PROXMOX_NODE, vmid=cloneid, pool=CONFIG.VM_POOL, name=name)
-    waitOnTask(cloneTask)
-    if(vnc == True):
-        setupVNC(newId)
-    snapshotTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(newId).snapshot.post(vmid=newId, node=CONFIG.PROXMOX_NODE, snapname="initState")
-    waitOnTask(snapshotTask)
-    return newId
+    try:
+        cloneTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(cloneid).clone.post(newid=newId, node=CONFIG.PROXMOX_NODE, vmid=cloneid, pool=CONFIG.VM_POOL, name=name)
+        waitOnTask(cloneTask)
+        if(vnc == True):
+            setupVNC(newId)
+        snapshotTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(newId).snapshot.post(vmid=newId, node=CONFIG.PROXMOX_NODE, snapname="initState")
+        waitOnTask(snapshotTask)
+        return newId
+    except core.ResourceException:
+        return createVM(cloneid, getNextId())
+    
 
 def startLXC(vmid):
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
