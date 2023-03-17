@@ -1,5 +1,6 @@
 from proxmoxer import ProxmoxAPI
 import threading, os, time, subprocess, re, urllib.parse, datetime
+from ratelimit import limits, sleep_and_retry, RateLimitException
 
 import config as CONFIG 
 
@@ -181,8 +182,7 @@ def updateStatusLXC(lxc):
         "name": status["name"],
         "status": status["status"],
         "ipAddr": ipAddr,
-        "vncStatus": False,
-        "lastUpdate": datetime.datetime.now()
+        "vncStatus": False
     }
     return statusEntry
 
@@ -203,11 +203,12 @@ def updateStatusVM(vm):
         "name": status["name"],
         "status": status["status"],
         "ipAddr": ipAddr,
-        "vncStatus": vncEnabled,
-        "lastUpdate": datetime.datetime.now()
+        "vncStatus": vncEnabled
     }
     return statusEntry
 
+@sleep_and_retry
+@limits(calls=1, period=30) #Max 1 call per 30 seconds
 def createLXC(cloneid, newId, name="default"):
     if(name == "default"):
         name = getNameLXC(cloneid)
@@ -218,6 +219,8 @@ def createLXC(cloneid, newId, name="default"):
     waitOnTask(snapshotTask)
     return newId
 
+@sleep_and_retry
+@limits(calls=1, period=30) #Max 1 call per 30 seconds
 def createVM(cloneid, newId, name="default", vnc=None):
     if(name == "default"):
         name = getNameVM(cloneid)
