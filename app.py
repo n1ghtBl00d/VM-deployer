@@ -8,6 +8,7 @@ from api import *
 
 app = Flask(__name__)
 socketio = SocketIO(app) 
+statusCache = []
 
 
 heartBeat()
@@ -15,15 +16,12 @@ heartBeat()
 def updateStatusWrapper(vmid):
     lxcs = getLXCs()
     vms = getVMs()
-    status = ""
-    ipAddr = ""
-    vncEnabled = False
+    statusEntry = ""
     if vmid in lxcs:
-        status, ipAddr = updateStatusLXC(vmid)
+        statusEntry = updateStatusLXC(vmid)
     if vmid in vms:
-        status, ipAddr, vncEnabled = updateStatusVM(vmid)
-    #print(f"statusUpdate: {vmid} is {status['name']} - {ipAddr}")
-    socketio.emit("vmListEntry", {"vmid": vmid, "name": status["name"], "status": status["status"], "ip": ipAddr, "vncStatus": vncEnabled})    
+        statusEntry = updateStatusVM(vmid)
+    socketio.emit("vmListEntry", {"vmid": statusEntry["vmid"], "name": statusEntry["name"], "status": statusEntry["status"], "ip": statusEntry["ipAddr"], "vncStatus": statusEntry["vncStatus"]})    
     
 
 

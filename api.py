@@ -1,5 +1,5 @@
 from proxmoxer import ProxmoxAPI
-import threading, os, time, subprocess, re, urllib.parse
+import threading, os, time, subprocess, re, urllib.parse, datetime
 
 import config as CONFIG 
 
@@ -152,7 +152,15 @@ def updateStatusLXC(lxc):
         ipAddr = getIP(lxc)
     else:
         ipAddr = "n/a"
-    return status, ipAddr
+    statusEntry = {
+        "vmid": lxc,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": False,
+        "lastUpdate": datetime.datetime.now()
+    }
+    return statusEntry
 
 def updateStatusVM(vm):
     status = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vm).status.current.get()
@@ -166,7 +174,15 @@ def updateStatusVM(vm):
         ipAddr = getIP(vm)   
     else:
         ipAddr = "n/a" 
-    return status, ipAddr, vncEnabled
+    statusEntry = {
+        "vmid": vm,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": vncEnabled,
+        "lastUpdate": datetime.datetime.now()
+    }
+    return statusEntry
 
 def createLXC(cloneid, newId, name="default"):
     if(name == "default"):
