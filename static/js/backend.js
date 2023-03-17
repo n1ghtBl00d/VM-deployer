@@ -24,10 +24,20 @@ function cloneTemplate(){
     if(selectedValue == "NULL"){
         $("#ddlWarning").text("Please select a Template from the list");
     }else{
-        socket.emit("cloneTemplate", selectedValue);
+        var numberOfClones = 1;
+        if($('#multiClone').is(':checked')){
+            numberOfClones = $('#numClones').val()
+        }
+        for (let i = 0; i < numberOfClones; i++) {
+            setTimeout( () => {
+                console.log("Cloned #" + (i+1) + " of " + numberOfClones)
+                socket.emit("cloneTemplate", selectedValue);
+            }, (i * 5000)); // ~5 second delay between each iteration
+        }
         $("#ddlWarning").text("");
     }
 }
+
 
 function delAll(){
     console.log("entered delAll");
