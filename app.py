@@ -44,6 +44,8 @@ def updateStatusCached(vmid):
         if (entry["vmid"] == vmid):
             if (entry["updateTime"] < datetime.datetime.now()-datetime.timedelta(minutes=60)):
                 updateStatusWrapper(vmid)
+            elif (entry["statusEntry"]["ipAddr"] == "n/a"):
+                updateStatusWrapper(vmid)
             else:
                 statusEntry = entry["statusEntry"]
                 socketio.emit("vmListEntry", {"vmid": statusEntry["vmid"], "name": statusEntry["name"], "status": statusEntry["status"], "ip": statusEntry["ipAddr"], "vncStatus": statusEntry["vncStatus"]})
