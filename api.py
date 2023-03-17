@@ -3,6 +3,11 @@ import threading, os, time, subprocess, re, urllib.parse, datetime
 
 import config as CONFIG 
 
+arpResult = {
+    "result": "resultString",
+    "updateTime": datetime.datetime.now()
+}
+
 ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
 macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
 vncPattern = re.compile(r':\s*(\d*)')
@@ -130,15 +135,34 @@ def getIP(vmid):
     if vmid in lxcs:
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
-        command = "arp-scan -l | grep -i " + mac
-        ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
-        return ipAddr
     if vmid in vms:
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
-        command = "arp-scan -l | grep -i " + mac
-        ipAddr = str(ipPattern.search(subprocess.check_output(command, shell=True).decode('utf-8'))[0])
-        return ipAddr
+    return findIPbyMac(mac)
+
+def findIPbyMac(mac):
+    mac = mac.lower()
+    now = datetime.datetime.now()
+    if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
+        arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
+        arpResult["updateTime"] = datetime.datetime.now()
+    results = arpResult["result"].split("\n")
+    for result in results:
+        if mac in result:
+            return str(ipPattern.search(result)[0])
+    
+    #If not found, try again but force arp scan
+    arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
+    arpResult["updateTime"] = datetime.datetime.now()
+    results = arpResult["result"].split("\n")
+    for result in results:
+        #print(result)
+        if mac in result:
+            return str(ipPattern.search(result)[0])
+    
+    #If not found
+    return "Not Found"
+
 
 def waitOnTask(task_id):
     data = {"status": ""}
