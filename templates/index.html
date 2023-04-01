@@ -25,6 +25,17 @@
         button {
             margin-right: 10px;
         }
+
+        .scrollabletextbox {
+            height:200px;
+            width:80%;
+            font-family: Verdana, Tahoma, Arial, Helvetica, sans-serif;
+            font-size: 82%;
+            overflow:scroll;
+            border-style: groove;
+            text-align: left;
+            line-height: 0.5;
+        }
         </style>
 </head>
 
@@ -57,7 +68,7 @@
             
         </div>
         <div style="width: 50%; float: right;">
-            <p id="output"></p>
+            <div id="output" class="scrollabletextbox"></div>
         </div>
     </div>
     <div id="vmListDiv" style="width: 80vw; margin-left: 10vw;">

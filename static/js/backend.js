@@ -70,7 +70,8 @@ function addFirewallRule(){
 socket.on("statusUpdate", (data) => {
     console.log("statusUpdate");
     console.log(data.status);
-    document.getElementById('output').innerHTML = "<p>ID: " + data.newID + " - " + data.status + "</p>";
+    date = new Date();
+    document.getElementById('output').innerHTML = "<p><span style='color:#00f;'>"+ date.toLocaleTimeString('en', {timeZone: 'America/Denver'}).split(' ')[0] + "></span> ID: " + data.newID + " - " + data.status + "</p>" + document.getElementById('output').innerHTML;
 
 });
 
