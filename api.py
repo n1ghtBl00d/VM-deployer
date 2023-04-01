@@ -41,6 +41,32 @@ def getVMs():
     vms.sort()
     return vms
 
+def getTemplateLXCs():
+    lxcs = []
+    for lxc in proxmox.nodes(CONFIG.PROXMOX_NODE).lxc.get():
+        lxcs.append(int(lxc["vmid"]))
+    lxcs[:] = [x for x in lxcs if (x >= CONFIG.TEMPLATE_RANGE_LOWER and x <= CONFIG.TEMPLATE_RANGE_UPPER)]
+    lxcs.sort()
+    return lxcs
+
+def getTemplateVMs():
+    vms = []
+    for vm in proxmox.nodes(CONFIG.PROXMOX_NODE).qemu.get():
+        vms.append(int(vm["vmid"]))
+    vms[:] = [x for x in vms if (x >= CONFIG.TEMPLATE_RANGE_LOWER and x <= CONFIG.TEMPLATE_RANGE_UPPER)]
+    vms.sort()
+    return vms
+
+def getType(vmid):
+    lxcs = getLXCs() + getTemplateLXCs()
+    vms = getVMs() + getTemplateVMs()
+    if vmid in lxcs:
+        return "lxc"
+    if vmid in vms:
+        return "vm"
+    else:
+        return "error"
+
 def getVNCports():
     ports = []
     for vm in proxmox.nodes(CONFIG.PROXMOX_NODE).qemu.get():
@@ -60,21 +86,21 @@ def checkTemplateVNC(templateId):
     else:
         return False
 
-def getTemplateLXCs():
-    lxcs = []
-    for lxc in proxmox.nodes(CONFIG.PROXMOX_NODE).lxc.get():
-        lxcs.append(int(lxc["vmid"]))
-    lxcs[:] = [x for x in lxcs if (x >= CONFIG.TEMPLATE_RANGE_LOWER and x <= CONFIG.TEMPLATE_RANGE_UPPER)]
-    lxcs.sort()
-    return lxcs
+def getName(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
+        description = config["description"]
+        name = description.partition('\n')[0][2:]
+        return name
+    if hostType == "vm":
+        config = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).config.get()
+        description = config["description"]
+        name = description.partition('\n')[0][2:]
+        return name
+    #If Error:
+    return "Name Not Found"
 
-def getTemplateVMs():
-    vms = []
-    for vm in proxmox.nodes(CONFIG.PROXMOX_NODE).qemu.get():
-        vms.append(int(vm["vmid"]))
-    vms[:] = [x for x in vms if (x >= CONFIG.TEMPLATE_RANGE_LOWER and x <= CONFIG.TEMPLATE_RANGE_UPPER)]
-    vms.sort()
-    return vms
 
 def getNameLXC(vmid):
     config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
@@ -104,9 +130,9 @@ def getAllTemplates():
     lxcs = getTemplateLXCs()
     vms = getTemplateVMs()
     for lxc in lxcs:
-        templates.append({"vmid": lxc, "name": getNameLXC(lxc)})
+        templates.append({"vmid": lxc, "name": getName(lxc)})
     for vm in vms:
-        templates.append({"vmid": vm, "name": getNameVM(vm)})
+        templates.append({"vmid": vm, "name": getName(vm)})
     return templates
 
 
@@ -132,15 +158,16 @@ def getNextVncPort():
 
 
 def getIP(vmid):
-    lxcs = getLXCs()
-    vms = getVMs()
-    if vmid in lxcs:
+    hostType = getType(vmid)
+    if hostType == "lxc":
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
-    if vmid in vms:
+        return findIPbyMAC(mac)
+    if hostType == "vm":
         config = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).config.get()
         mac = str(macPattern.search(str(config))[0])
-    return findIPbyMAC(mac)
+        return findIPbyMAC(mac)
+    return "N/A"
 
 def findIPbyMAC(mac):
     mac = mac.lower()
