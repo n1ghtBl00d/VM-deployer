@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('delAll').addEventListener("click", delAll);
     document.getElementById('updateVmList').addEventListener("click", updateStatus);
     document.getElementById('cloneTemplate').addEventListener("click", cloneTemplate);
+    document.getElementById('firewallBtn').addEventListener("click", addFirewallRule);
     vmTable = document.getElementById('vmTable');
     templateList = document.getElementById('templatesDDL');
     socket.emit("getTemplates", "get");
@@ -53,6 +54,17 @@ function updateStatus(){
     console.log("updateStatus");
     vmTable.innerHTML = "<tr><th style='width: 10%;'>ID</th><th style='width: 20%;'>Name</th><th style='width: 10%;'>Status</th><th style='width: 20%;'>IP Address</th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th><th style='width: 10%;'></th></tr>";
     socket.emit("updateAllStatus", "start");
+}
+
+function addFirewallRule(){
+    vmid = $("#firewallId").val()
+    ipAddr = $("#firewallIP").val()
+    if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(ipAddr)) {  
+        socket.emit("addFirewallEntry", {"vmid": vmid, "ipAddr": ipAddr})
+    } else{
+        alert("You have entered an invalid IP address!") 
+    } 
+      
 }
 
 socket.on("statusUpdate", (data) => {
@@ -106,3 +118,4 @@ $(document).on("click", ".revertVM", function(){
     var vmid = $(this).data('vmid')
     socket.emit("revertState", {"vmid": vmid})
 });
+

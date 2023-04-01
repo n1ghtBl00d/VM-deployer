@@ -57,7 +57,7 @@ def updateStatusCached(vmid):
 
 @app.route("/")
 def hello_world():
-    return render_template('index.html')
+    return render_template('index.html', CLONE_RANGE_LOWER =CONFIG.CLONE_RANGE_LOWER, CLONE_RANGE_UPPER =CONFIG.CLONE_RANGE_UPPER)
 
 @app.route("/vnc")
 def vncConnect():
@@ -177,3 +177,13 @@ def revertState(data):
     if vmid in vms:
         rebootVM(vmid)
     socketio.emit("statusUpdate", {"status": "Rebooted", "newID": vmid})
+
+@socketio.on("addFirewallEntry")
+def addFirewallEntry(data):
+    print("entered addFirewallEntry()")
+    print(data)
+    vmid = int(data["vmid"])
+    ipAddr = data["ipAddr"]
+    print(f"vmid: {vmid}, ipAddr: {ipAddr}")
+    enableFirewall(vmid)
+    addFirewallAllowedIP(vmid, ipAddr)

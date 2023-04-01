@@ -31,7 +31,7 @@
 <body>
     <h1>801Labs deploy VM test</h1>
     <hr>
-    <div style="text-align: center;">
+    <div style="text-align: center; overflow: hidden;">
         <div style="width: 50%; float: left;">
             <label for="templates">Choose a template:</label>
             <select name="templates" id="templatesDDL">
@@ -45,14 +45,21 @@
             <input type="number" name="numClones" id="numClones" min="1" max="30">
             <br />
             <span id="ddlWarning" style="color: red;"></span>
+            <br />
+            <div>
+                <p>Add Firewall Rule</p>
+                <label for="firewallId">ID#</label>
+                <input type="number" name="firewallId" id="firewallId" min="{{CLONE_RANGE_LOWER}}" max="{{CLONE_RANGE_UPPER}}" style="width: 45px;">
+                <label for="firewallIP">IP Address:</label>
+                <input type="text" name="firewallIP" id="firewallIP">
+                <button id="firewallBtn">Add</button>
+            </div>
             
         </div>
         <div style="width: 50%; float: right;">
             <p id="output"></p>
         </div>
     </div>
-    <br>
-    <br>
     <div id="vmListDiv" style="width: 80vw; margin-left: 10vw;">
         <h3>Current VMs:</h3>
         <button id="updateVmList">Update</button><button id="delAll">Delete All</button>
