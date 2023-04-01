@@ -343,3 +343,17 @@ def setupVNC(vmid):
 def setVNCPassword(vmid, password):
     command = urllib.parse.quote(f'set_password vnc {password} -d vnc2')
     proxmox(f"nodes/{CONFIG.PROXMOX_NODE}/qemu/{vmid}/monitor?command={command}").post() #Had to use alternative syntax due to bad string encoding in default syntax
+
+def enableFirewall(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
+    if hostType == "vm":
+        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
+
+def addFirewallAllowedIP(vmid, ipAddr):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr)
+    if hostType == "vm":
+        proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr)
