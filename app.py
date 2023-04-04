@@ -88,25 +88,16 @@ def getTemplates(data):
 
 @socketio.on("cloneTemplate")
 def cloneTemplate(data):
-    id = int(data)
-    lxcs = getTemplateLXCs()
+    templateId = int(data)
     nextid = getNextId()
-    if id in lxcs:
-        socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-        newid = createLXC(id, nextid)
-        socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
-        startLXC(newid)
-        socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
-        statusThread = threading.Timer(15, updateStatusWrapper, args=[newid])
-        statusThread.start
-    else:
-        socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-        newid = createVM(id, nextid)
-        socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
-        startVM(newid)
-        socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
-        statusThread = threading.Timer(15, updateStatusWrapper, args=[newid])
-        statusThread.start
+    socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
+    newid = create(templateId, nextid)
+    socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
+    start(newid)
+    socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
+    statusThread = threading.Timer(15, updateStatusWrapper, args=[newid])
+    statusThread.start()
+    
 
 @socketio.on("delAll")
 def delAll(data):
@@ -146,36 +137,21 @@ def updateAllStatus(data):
 @socketio.on("deleteVM")
 def handleDelete(data):
     vmid = data['vmid']
-    lxcs = getLXCs()
-    vms = getVMs()
-    if vmid in lxcs:
-        deleteLXC(vmid)
-    if vmid in vms:
-        deleteVM(vmid)
+    delete(vmid)
+    socketio.emit("statusUpdate", {"status": "Deleted", "newID": vmid})
 
 @socketio.on("revertState")
 def revertState(data):
     vmid = data['vmid']
     socketio.emit("statusUpdate", {"status": "Reverting to Initial State", "newID": vmid})
-    lxcs = getLXCs()
-    vms = getVMs()
-    if vmid in lxcs:
-        revertLXC(vmid)
-    if vmid in vms:
-        revertVM(vmid)
+    revert(vmid)
     socketio.emit("statusUpdate", {"status": "Reverted to Initial State", "newID": vmid})
-    
 
 @socketio.on("reboot")
-def revertState(data):
+def reboot(data):
     vmid = data['vmid']
     socketio.emit("statusUpdate", {"status": "Rebooting", "newID": vmid})
-    lxcs = getLXCs()
-    vms = getVMs()
-    if vmid in lxcs:
-        rebootLXC(vmid)
-    if vmid in vms:
-        rebootVM(vmid)
+    reboot(vmid)
     socketio.emit("statusUpdate", {"status": "Rebooted", "newID": vmid})
 
 @socketio.on("addFirewallEntry")

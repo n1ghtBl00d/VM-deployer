@@ -235,6 +235,14 @@ def updateStatusVM(vm):
     }
     return statusEntry
 
+def create(cloneid, newid, name="default", vnc=None):
+    hostType = getType(cloneid)
+    if (hostType == "lxc"):
+        return createLXC(cloneid, newid, name)
+    if (hostType == "vm"):
+        return createVM(cloneid, newid, name, vnc)
+    
+
 @backoff.on_exception(backoff.constant, requests.exceptions.ReadTimeout, interval=10, max_tries = 5)
 @sleep_and_retry
 @limits(calls=1, period=30) #Max 1 call per 30 seconds
@@ -268,6 +276,12 @@ def createVM(cloneid, newId, name="default", vnc=None):
     except core.ResourceException:
         return createVM(cloneid, getNextId())
     
+def start(vmid):
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        startLXC(vmid)
+    if (hostType == "vm"):
+        startVM(vmid)
 
 def startLXC(vmid):
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
@@ -276,6 +290,13 @@ def startLXC(vmid):
 def startVM(vmid):
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
     waitOnTask(startTask)
+
+def revert(vmid):
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        revertLXC(vmid)
+    if (hostType == "vm"):
+        revertVM(vmid)
 
 def revertLXC(vmid):
     revertTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).snapshot("initState").rollback.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, snapname="initState")
@@ -288,6 +309,13 @@ def revertVM(vmid):
     waitOnTask(revertTask)
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
     waitOnTask(startTask)
+
+def reboot(vmid):
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        rebootLXC(vmid)
+    if (hostType == "vm"):
+        rebootVM(vmid)
 
 def rebootLXC(vmid):
     status = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).status.current.get()
@@ -307,6 +335,13 @@ def rebootVM(vmid):
         startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
         waitOnTask(startTask)
 
+def shutdown(delId):
+    hostType = getType(delId)
+    if (hostType == "lxc"):
+        shutdownLXC(delId)
+    if (hostType == "vm"):
+        shutdownVM(delId)
+
 def shutdownLXC(delId):
     status = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(delId).status.current.get()
     if(status["status"] != "stopped"):
@@ -318,6 +353,13 @@ def shutdownVM(delId):
     if(status["status"] != "stopped"):
         shutdownTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(delId).status.stop.post(node=CONFIG.PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
+
+def delete(delId):
+    hostType = getType(delId)
+    if (hostType == "lxc"):
+        deleteLXC(delId)
+    if (hostType == "vm"):
+        deleteVM(delId)
 
 def deleteLXC(delId):
     status = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(delId).status.current.get()
