@@ -351,9 +351,9 @@ def enableFirewall(vmid):
     if hostType == "vm":
         firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
 
-def addFirewallAllowedIP(vmid, ipAddr):
+def addFirewallAllowedIP(vmid, ipAddr, interface="net0"):
     hostType = getType(vmid)
     if hostType == "lxc":
-        proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr)
+        proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
     if hostType == "vm":
-        proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr)
+        proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
