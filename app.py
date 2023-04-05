@@ -6,6 +6,8 @@ from ratelimit import limits, sleep_and_retry, RateLimitException
 import threading, os, time, subprocess, re, secrets, datetime
 
 from api import *
+from api_groups import *
+import deployGroups
 
 
 app = Flask(__name__)
@@ -86,6 +88,13 @@ def getTemplates(data):
     templates = getAllTemplates()
     socketio.emit("TemplateList", templates)
 
+@socketio.on("getGroups")
+def getTemplates(data):
+    groupList = []
+    for index, group in enumerate(deployGroups.Groups):
+        groupList.append({"groupID": index, "groupName": group["groupName"]})
+    socketio.emit("groupList", groupList)
+
 @socketio.on("cloneTemplate")
 def cloneTemplate(data):
     templateId = int(data)
@@ -163,3 +172,8 @@ def addFirewallEntry(data):
     print(f"vmid: {vmid}, ipAddr: {ipAddr}")
     enableFirewall(vmid)
     addFirewallAllowedIP(vmid, ipAddr)
+
+@socketio.on("cloneGroup")
+def runCloneGroup(data):
+    groupID = int(data)
+    cloneGroup(deployGroups.Groups[groupID])

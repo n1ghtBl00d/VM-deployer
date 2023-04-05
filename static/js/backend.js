@@ -10,10 +10,12 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('delAll').addEventListener("click", delAll);
     document.getElementById('updateVmList').addEventListener("click", updateStatus);
     document.getElementById('cloneTemplate').addEventListener("click", cloneTemplate);
+    document.getElementById('deployGroup').addEventListener("click", deployGroup);
     document.getElementById('firewallBtn').addEventListener("click", addFirewallRule);
     vmTable = document.getElementById('vmTable');
-    templateList = document.getElementById('templatesDDL');
+
     socket.emit("getTemplates", "get");
+    socket.emit("getGroups", "get");
     updateStatus()
     
 });
@@ -36,6 +38,17 @@ function cloneTemplate(){
             }, (i * 5000)); // ~5 second delay between each iteration
         }
         $("#ddlWarning").text("");
+    }
+}
+
+function deployGroup(){
+    console.log("entered deployGroup()")
+    var selectedValue = $("#groupTemplatesDDL").val()
+    if(selectedValue == "NULL"){
+        $("#ddlWarning").text("Please select a Template from the list");
+    }else{
+        console.log("Copying group " + selectedValue)
+        socket.emit("cloneGroup", selectedValue)
     }
 }
 
@@ -102,7 +115,15 @@ socket.on("TemplateList", (data) => {
     console.log("TemplateList");
     console.log(data);
     data.forEach(element => {
-        templateList.innerHTML += "<option value='" + element.vmid +"'>" + element.name + "</option>"
+        $("#templatesDDL")[0].innerHTML += "<option value='" + element.vmid +"'>" + element.name + "</option>";
+    });
+});
+
+socket.on("groupList", (data) => {
+    console.log("groupList");
+    console.log(data);
+    data.forEach(element => {
+        $("#groupTemplatesDDL")[0].innerHTML += "<option value='" + element.groupID +"'>" + element.groupName + "</option>";
     });
 });
 

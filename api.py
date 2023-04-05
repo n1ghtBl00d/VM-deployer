@@ -123,6 +123,8 @@ def clean_string(string):
             cleaned.append("-")
         elif (char == '.'):
             cleaned.append(char)
+        elif (char == '-'):
+            cleaned.append(char)
     return "".join(cleaned)
 
 def getAllTemplates():
@@ -274,7 +276,7 @@ def createVM(cloneid, newId, name="default", vnc=None):
         waitOnTask(snapshotTask)
         return newId
     except core.ResourceException:
-        return createVM(cloneid, getNextId())
+        return createVM(cloneid, getNextId(), name)
     
 def start(vmid):
     hostType = getType(vmid)
