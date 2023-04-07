@@ -2,11 +2,12 @@ from proxmoxer import ProxmoxAPI, core
 import threading, os, time, subprocess, re, urllib.parse, datetime, requests
 from ratelimit import limits, sleep_and_retry, RateLimitException
 import backoff
+import scapy.all as scapy
 
 import config as CONFIG 
 
 arpResult = {
-    "result": "resultString",
+    "results": [],
     "updateTime": datetime.datetime.now()
 }
 
@@ -158,6 +159,23 @@ def getNextVncPort():
             if not any((p["port"]) == x for p in ports):
                 return x
 
+# Based on https://github.com/FrostyLabs/arp-scan/blob/master/arp-scan.py
+def arpScan():
+    result = []
+    scapy.conf.verb = 0
+
+    for network in CONFIG.NETWORKS:
+
+        ans, unans = scapy.srp(scapy.Ether(dst="ff:ff:ff:ff:ff:ff")/scapy.ARP(pdst = network["address"]), 
+                timeout = 2, 
+                iface = network["interface"],
+                inter = 0.1)
+        for snd,rcv in ans:
+            result.append({"MAC": rcv.psrc, "IP": rcv.src})
+    arpResult = {
+        "results": result,
+        "updateTime": datetime.datetime.now()
+    }
 
 def getIP(vmid):
     hostType = getType(vmid)
@@ -175,21 +193,16 @@ def findIPbyMAC(mac):
     mac = mac.lower()
     now = datetime.datetime.now()
     if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
-        arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
-        arpResult["updateTime"] = datetime.datetime.now()
-    results = arpResult["result"].split("\n")
-    for result in results:
-        if mac in result:
-            return str(ipPattern.search(result)[0])
+        arpScan()
+    for result in arpResult["results"]:
+        if str(result["MAC"]).lower == mac:
+            return result["IP"]
     
     #If not found, try again but force arp scan
-    arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
-    arpResult["updateTime"] = datetime.datetime.now()
-    results = arpResult["result"].split("\n")
-    for result in results:
-        #print(result)
-        if mac in result:
-            return str(ipPattern.search(result)[0])
+    arpScan()
+    for result in arpResult["results"]:
+        if str(result["MAC"]).lower == mac:
+            return result["IP"]
     
     #If not found
     return "Not Found"
