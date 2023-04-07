@@ -8,7 +8,7 @@ import config as CONFIG
 
 arpResult = {
     "results": [],
-    "updateTime": datetime.datetime.now()
+    "updateTime": datetime.datetime(1970,1,1)
 }
 
 ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
@@ -161,21 +161,22 @@ def getNextVncPort():
 
 # Based on https://github.com/FrostyLabs/arp-scan/blob/master/arp-scan.py
 def arpScan():
+    print("started arpScan()")
     result = []
     scapy.conf.verb = 0
 
     for network in CONFIG.NETWORKS:
-
+        print("running scan")
         ans, unans = scapy.srp(scapy.Ether(dst="ff:ff:ff:ff:ff:ff")/scapy.ARP(pdst = network["address"]), 
                 timeout = 2, 
                 iface = network["interface"],
                 inter = 0.1)
         for snd,rcv in ans:
-            result.append({"MAC": rcv.psrc, "IP": rcv.src})
-    arpResult = {
-        "results": result,
-        "updateTime": datetime.datetime.now()
-    }
+            result.append({"MAC": rcv.src, "IP": rcv.psrc})
+    arpResult["results"] = result
+    arpResult["updateTime"] = datetime.datetime.now()
+    print(f"finished arpScan(), returned {len(result)}")
+    print(result)
 
 def getIP(vmid):
     hostType = getType(vmid)
@@ -194,14 +195,20 @@ def findIPbyMAC(mac):
     now = datetime.datetime.now()
     if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
         arpScan()
+        print(f"arp result: {arpResult}")
     for result in arpResult["results"]:
-        if str(result["MAC"]).lower == mac:
+        resultmac = str(result["MAC"]).lower()
+        print(f"{mac} == {resultmac} : {mac == resultmac}")
+        if str(result["MAC"]).lower() == mac:
             return result["IP"]
     
     #If not found, try again but force arp scan
     arpScan()
+    print(f"arp result: {arpResult}")
     for result in arpResult["results"]:
-        if str(result["MAC"]).lower == mac:
+        resultmac = str(result["MAC"]).lower()
+        print(f"{mac} == {resultmac} : {mac == resultmac}")
+        if str(result["MAC"]).lower() == mac:
             return result["IP"]
     
     #If not found
