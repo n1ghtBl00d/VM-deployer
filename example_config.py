@@ -17,3 +17,8 @@ CLONE_RANGE_UPPER = 400
 NOVNC_IP = "10.0.0.3"                   # IP address of noVNC server
 NOVNC_PORT = 9999                       # Port noVNC server is listening on
 PROXMOX_IP = "10.0.0.2"                 # IP address of Proxmox Server with port open for VNC connection. Can be same as API_URL
+
+NETWORKS = [                            # A list of Networks to scan and the interface to reach them on
+    {"interface":"eth0", "address":"172.16.0.0/16"},
+    {"interface":"eth1", "address":"10.13.37.0/24"}
+    ]

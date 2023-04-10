@@ -6,8 +6,8 @@ import backoff
 import config as CONFIG 
 
 arpResult = {
-    "result": "resultString",
-    "updateTime": datetime.datetime.now()
+    "results": [],
+    "updateTime": datetime.datetime(1970, 1, 1)
 }
 
 ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
@@ -175,24 +175,32 @@ def findIPbyMAC(mac):
     mac = mac.lower()
     now = datetime.datetime.now()
     if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
-        arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
-        arpResult["updateTime"] = datetime.datetime.now()
-    results = arpResult["result"].split("\n")
-    for result in results:
-        if mac in result:
-            return str(ipPattern.search(result)[0])
+        arpScan()
+    for result in arpResult["results"]:
+        if result[1] == mac:
+            return result[0]
     
     #If not found, try again but force arp scan
-    arpResult["result"] = str(subprocess.check_output("arp-scan -l", shell=True).decode('utf-8')).lower()
-    arpResult["updateTime"] = datetime.datetime.now()
-    results = arpResult["result"].split("\n")
-    for result in results:
-        #print(result)
-        if mac in result:
-            return str(ipPattern.search(result)[0])
+    arpScan()
+    for result in arpResult["results"]:
+        if result[1] == mac:
+            return result[0]
     
     #If not found
     return "Not Found"
+
+def arpScan():
+    resultString = ""
+    resultsArr = []
+    for network in CONFIG.NETWORKS:
+        resultString += str(subprocess.check_output("arp-scan -l -I " + network["interface"], shell=True).decode('utf-8')).lower()
+    results = resultString.split("\n")
+    for result in results:
+        if(ipPattern.search(result)):
+            values = result.split("\t")
+            resultsArr.append((values[0], values[1]))
+    arpResult["results"] = resultsArr
+    arpResult["updateTime"] = datetime.datetime.now()
 
 
 def waitOnTask(task_id):
@@ -236,6 +244,7 @@ def updateStatusVM(vm):
         "vncStatus": vncEnabled
     }
     return statusEntry
+
 
 def create(cloneid, newid, name="default", vnc=None):
     hostType = getType(cloneid)
