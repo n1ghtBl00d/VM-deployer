@@ -11,7 +11,7 @@ Developed for [801Labs](801labs.org) to deploy Virtual Machines and Containers f
     * Proxmoxer
     * ratelimit
     * backoff
-    * scapy
+* arp-scan
 * A user with permissions in Proxmox (I created bot@pve)
     * VM.Allocate
     * VM.Audit
