@@ -1,10 +1,13 @@
+#region imports
 from proxmoxer import ProxmoxAPI, core
 import threading, os, time, subprocess, re, urllib.parse, datetime, requests
 from ratelimit import limits, sleep_and_retry, RateLimitException
 import backoff
 
 import config as CONFIG 
+#endregion imports
 
+#region global variables
 arpResult = {
     "results": [],
     "updateTime": datetime.datetime(1970, 1, 1)
@@ -18,13 +21,81 @@ vncPattern = re.compile(r':\s*(\d*)')
 proxmox = ProxmoxAPI(
     CONFIG.API_URL, user=CONFIG.API_USERNAME, password=CONFIG.API_PASSWORD, verify_ssl=CONFIG.SSL_VERIFY, port=CONFIG.API_PORT
 )
+#endregion global variables
 
+#region utilities
 def heartBeat():
     proxmox.nodes.get()
     print("heartbeat")
     heartBeatThread = threading.Timer(3600, heartBeat)
     heartBeatThread.start()
 
+def waitOnTask(task_id):
+    data = {"status": ""}
+    while (data["status"] != "stopped"):
+        data = proxmox.nodes(CONFIG.PROXMOX_NODE).tasks(task_id).status.get()
+
+def clean_string(string):
+    cleaned = []
+    for char in string:
+        if char.isalnum():
+            cleaned.append(char)
+        elif char.isspace():
+            cleaned.append("-")
+        elif (char == '.'):
+            cleaned.append(char)
+        elif (char == '-'):
+            cleaned.append(char)
+    return "".join(cleaned)
+
+#region updateStatus()
+def updateStatus(vmid):
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        return updateStatusLXC(vmid)
+    if (hostType == "vm"):
+        return updateStatusVM(vmid)
+    
+def updateStatusLXC(lxc):
+    status = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(lxc).status.current.get()
+    if status["status"] == "running":
+        ipAddr = getIP(lxc)
+    else:
+        ipAddr = "n/a"
+    statusEntry = {
+        "vmid": lxc,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": False
+    }
+    return statusEntry
+
+def updateStatusVM(vm):
+    status = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vm).status.current.get()
+    vncPorts = getVNCports()
+    vncEnabled = False
+    for entry in vncPorts:
+        if entry["vmid"] == vm:
+            vncEnabled = True
+            break
+    if status["status"] == "running":
+        ipAddr = getIP(vm)   
+    else:
+        ipAddr = "n/a" 
+    statusEntry = {
+        "vmid": vm,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": vncEnabled
+    }
+    return statusEntry
+#endregion updateStatus()
+
+#endregion utilites
+
+#region get info
 def getLXCs():
     lxcs = []
     for lxc in proxmox.nodes(CONFIG.PROXMOX_NODE).lxc.get():
@@ -114,19 +185,6 @@ def getNameVM(vmid):
     name = description.partition('\n')[0][2:]
     return name
 
-def clean_string(string):
-    cleaned = []
-    for char in string:
-        if char.isalnum():
-            cleaned.append(char)
-        elif char.isspace():
-            cleaned.append("-")
-        elif (char == '.'):
-            cleaned.append(char)
-        elif (char == '-'):
-            cleaned.append(char)
-    return "".join(cleaned)
-
 def getAllTemplates():
     templates = []
     lxcs = getTemplateLXCs()
@@ -157,8 +215,9 @@ def getNextVncPort():
         for x in range(1, 99):
             if not any((p["port"]) == x for p in ports):
                 return x
+#endregion get info
 
-
+#region Networking
 def getIP(vmid):
     hostType = getType(vmid)
     if hostType == "lxc":
@@ -203,49 +262,28 @@ def arpScan():
     arpResult["updateTime"] = datetime.datetime.now()
 
 
-def waitOnTask(task_id):
-    data = {"status": ""}
-    while (data["status"] != "stopped"):
-        data = proxmox.nodes(CONFIG.PROXMOX_NODE).tasks(task_id).status.get()
+#region firewall
+def enableFirewall(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
+    if hostType == "vm":
+        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
+
+def addFirewallAllowedIP(vmid, ipAddr, interface="net0"):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
+    if hostType == "vm":
+        proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
+#endregion firewall
 
 
-def updateStatusLXC(lxc):
-    status = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(lxc).status.current.get()
-    if status["status"] == "running":
-        ipAddr = getIP(lxc)
-    else:
-        ipAddr = "n/a"
-    statusEntry = {
-        "vmid": lxc,
-        "name": status["name"],
-        "status": status["status"],
-        "ipAddr": ipAddr,
-        "vncStatus": False
-    }
-    return statusEntry
+#endregion Netowrking
 
-def updateStatusVM(vm):
-    status = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vm).status.current.get()
-    vncPorts = getVNCports()
-    vncEnabled = False
-    for entry in vncPorts:
-        if entry["vmid"] == vm:
-            vncEnabled = True
-            break
-    if status["status"] == "running":
-        ipAddr = getIP(vm)   
-    else:
-        ipAddr = "n/a" 
-    statusEntry = {
-        "vmid": vm,
-        "name": status["name"],
-        "status": status["status"],
-        "ipAddr": ipAddr,
-        "vncStatus": vncEnabled
-    }
-    return statusEntry
+#region basic VM functions
 
-
+#region Create()
 def create(cloneid, newid, name="default", vnc=None):
     hostType = getType(cloneid)
     if (hostType == "lxc"):
@@ -287,6 +325,9 @@ def createVM(cloneid, newId, name="default", vnc=None):
     except core.ResourceException:
         return createVM(cloneid, getNextId(), name)
     
+#endregion create()
+
+#region start()    
 def start(vmid):
     hostType = getType(vmid)
     if (hostType == "lxc"):
@@ -302,6 +343,9 @@ def startVM(vmid):
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
     waitOnTask(startTask)
 
+#endregion start()
+
+#region revert()
 def revert(vmid):
     hostType = getType(vmid)
     if (hostType == "lxc"):
@@ -320,7 +364,9 @@ def revertVM(vmid):
     waitOnTask(revertTask)
     startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
     waitOnTask(startTask)
+#endregion revert()
 
+#region reboot()
 def reboot(vmid):
     hostType = getType(vmid)
     if (hostType == "lxc"):
@@ -345,7 +391,9 @@ def rebootVM(vmid):
     else:
         startTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).status.start.post(node=CONFIG.PROXMOX_NODE, vmid=vmid)
         waitOnTask(startTask)
+#endregion reboot()
 
+#region shutdown()
 def shutdown(delId):
     hostType = getType(delId)
     if (hostType == "lxc"):
@@ -364,7 +412,9 @@ def shutdownVM(delId):
     if(status["status"] != "stopped"):
         shutdownTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(delId).status.stop.post(node=CONFIG.PROXMOX_NODE, vmid=delId)
         waitOnTask(shutdownTask)
+#endregion shutdown()
 
+#region delete()
 def delete(delId):
     hostType = getType(delId)
     if (hostType == "lxc"):
@@ -387,7 +437,11 @@ def deleteVM(delId):
         waitOnTask(shutdownTask)
     deleteTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(delId).delete()
     waitOnTask(deleteTask)
+#endregion delete()
 
+#endregion basic VM functions
+
+#region vnc
 def setupVNC(vmid):
     port = getNextVncPort()
     argsString = f"-vnc 0.0.0.0:{port},password=on"
@@ -396,17 +450,4 @@ def setupVNC(vmid):
 def setVNCPassword(vmid, password):
     command = urllib.parse.quote(f'set_password vnc {password} -d vnc2')
     proxmox(f"nodes/{CONFIG.PROXMOX_NODE}/qemu/{vmid}/monitor?command={command}").post() #Had to use alternative syntax due to bad string encoding in default syntax
-
-def enableFirewall(vmid):
-    hostType = getType(vmid)
-    if hostType == "lxc":
-        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
-    if hostType == "vm":
-        firewallTask = proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.options.put(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1)
-
-def addFirewallAllowedIP(vmid, ipAddr, interface="net0"):
-    hostType = getType(vmid)
-    if hostType == "lxc":
-        proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
-    if hostType == "vm":
-        proxmox.nodes(CONFIG.PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=CONFIG.PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
+#endregion vnc

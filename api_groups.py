@@ -1,8 +1,12 @@
+#region imports
 from api import *
 
 import deployGroups
+#endregion imports
 
+#region global variables
 currentGroups = []
+#endregion global variables
 
 def cloneGroup(group):
     groupId = len(currentGroups)

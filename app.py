@@ -1,3 +1,4 @@
+#region imports
 from flask import Flask
 from flask_socketio import SocketIO
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
@@ -8,15 +9,18 @@ import threading, os, time, subprocess, re, secrets, datetime
 from api import *
 from api_groups import *
 import deployGroups
+#endregion imports
 
-
+#region global variables
 app = Flask(__name__)
 socketio = SocketIO(app) 
 statusCache = []
+#endregion global variables
 
 
 heartBeat()
 
+#region utilites
 @sleep_and_retry
 @limits(calls=3, period=10) # Max 3 calls per 10 seconds
 def updateStatusWrapper(vmid):
@@ -54,9 +58,9 @@ def updateStatusCached(vmid):
             break
     else:
         updateStatusWrapper(vmid)
-  
+#endregion utilities  
 
-
+#region Flask routes
 @app.route("/")
 def hello_world():
     return render_template('index.html', CLONE_RANGE_LOWER =CONFIG.CLONE_RANGE_LOWER, CLONE_RANGE_UPPER =CONFIG.CLONE_RANGE_UPPER)
@@ -79,21 +83,15 @@ def vncConnect():
     VNC_REDIRECT_URL = f"http://{CONFIG.NOVNC_IP}:{CONFIG.NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&show_dot=true&"
     setVNCPassword(vmid, PASSWORD)
     return redirect(f"{VNC_REDIRECT_URL}path=vnc%2F{CONFIG.PROXMOX_IP}%2F{port}&password={PASSWORD}")
+#endregion Flask routes
 
+#region SocketIO event Channels 
 
-    
-
+#region Individual actions
 @socketio.on("getTemplates")
 def getTemplates(data):
     templates = getAllTemplates()
     socketio.emit("TemplateList", templates)
-
-@socketio.on("getGroups")
-def getTemplates(data):
-    groupList = []
-    for index, group in enumerate(deployGroups.Groups):
-        groupList.append({"groupID": index, "groupName": group["groupName"]})
-    socketio.emit("groupList", groupList)
 
 @socketio.on("cloneTemplate")
 def cloneTemplate(data):
@@ -172,8 +170,20 @@ def addFirewallEntry(data):
     print(f"vmid: {vmid}, ipAddr: {ipAddr}")
     enableFirewall(vmid)
     addFirewallAllowedIP(vmid, ipAddr)
+#endregion individual actions
 
+#region group actions
+@socketio.on("getGroups")
+def getTemplates(data):
+    groupList = []
+    for index, group in enumerate(deployGroups.Groups):
+        groupList.append({"groupID": index, "groupName": group["groupName"]})
+    socketio.emit("groupList", groupList)
+    
 @socketio.on("cloneGroup")
 def runCloneGroup(data):
     groupID = int(data)
     cloneGroup(deployGroups.Groups[groupID])
+#endregion group actions
+
+#endregion SocketIO event channels
