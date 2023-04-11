@@ -299,11 +299,14 @@ def createLXC(cloneid, newId, name="default"):
     if(name == "default"):
         name = getNameLXC(cloneid)
     name = clean_string(name.strip())
-    cloneTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(cloneid).clone.post(newid=newId, node=CONFIG.PROXMOX_NODE, vmid=cloneid, pool=CONFIG.VM_POOL, hostname=name)
-    waitOnTask(cloneTask)
-    snapshotTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(newId).snapshot.post(vmid=newId, node=CONFIG.PROXMOX_NODE, snapname="initState")
-    waitOnTask(snapshotTask)
-    return newId
+    try:
+        cloneTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(cloneid).clone.post(newid=newId, node=CONFIG.PROXMOX_NODE, vmid=cloneid, pool=CONFIG.VM_POOL, hostname=name)
+        waitOnTask(cloneTask)
+        snapshotTask = proxmox.nodes(CONFIG.PROXMOX_NODE).lxc(newId).snapshot.post(vmid=newId, node=CONFIG.PROXMOX_NODE, snapname="initState")
+        waitOnTask(snapshotTask)
+        return newId
+    except core.ResourceException:
+        return createLXC(cloneid, getNextId(), name)
 
 @backoff.on_exception(backoff.expo, (requests.exceptions.ReadTimeout, requests.exceptions.ReadTimeout), max_tries = 5)
 @sleep_and_retry
@@ -323,7 +326,7 @@ def createVM(cloneid, newId, name="default", vnc=None):
         waitOnTask(snapshotTask)
         return newId
     except core.ResourceException:
-        return createVM(cloneid, getNextId(), name)
+        return createVM(cloneid, getNextId(), name, vnc)
     
 #endregion create()
 
