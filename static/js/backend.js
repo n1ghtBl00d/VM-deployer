@@ -88,6 +88,14 @@ socket.on("statusUpdate", (data) => {
 
 });
 
+socket.on("statusUpdateGroup", (data) => {
+    console.log("statusUpdate");
+    console.log(data.status);
+    date = new Date();
+    document.getElementById('output').innerHTML = "<p><span style='color:#00f;'>"+ date.toLocaleTimeString('en', {timeZone: 'America/Denver'}).split(' ')[0] + "></span> Group: " + data.groupID + " - " + data.status + "</p>" + document.getElementById('output').innerHTML;
+
+});
+
 socket.on("vmListEntry", (data) => {
     vncButton = ""
     if(data.vncStatus == true && data.status != "stopped"){

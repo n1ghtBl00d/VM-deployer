@@ -19,6 +19,7 @@ statusCache = []
 
 
 heartBeat()
+api_groups_init(socketio)
 
 #region utilites
 @sleep_and_retry
