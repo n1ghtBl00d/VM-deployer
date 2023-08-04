@@ -252,7 +252,7 @@ def arpScan():
     resultString = ""
     resultsArr = []
     for network in CONFIG.NETWORKS:
-        resultString += str(subprocess.check_output("arp-scan -l -I " + network["interface"], shell=True).decode('utf-8')).lower()
+        resultString += str(subprocess.check_output(f"arp-scan -I {network['interface']} {network['address']}", shell=True).decode('utf-8')).lower()
     results = resultString.split("\n")
     for result in results:
         if(ipPattern.search(result)):
