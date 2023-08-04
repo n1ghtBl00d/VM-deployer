@@ -1,6 +1,7 @@
 #region imports
 from flask import Flask
 from flask_socketio import SocketIO
+from flask_cors import CORS
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
 from ratelimit import limits, sleep_and_retry, RateLimitException
 
@@ -13,7 +14,8 @@ import deployGroups
 
 #region global variables
 app = Flask(__name__)
-socketio = SocketIO(app) 
+socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app)
 statusCache = []
 #endregion global variables
 
