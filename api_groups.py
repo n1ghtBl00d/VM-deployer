@@ -1,7 +1,7 @@
 #region imports
-from api import *
+from .api import *
 
-import deployGroups
+from .deployGroups import Groups
 #endregion imports
 
 #region global variables

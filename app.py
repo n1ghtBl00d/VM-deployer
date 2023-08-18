@@ -1,25 +1,41 @@
 #region imports
 from flask import Flask
 from flask_socketio import SocketIO
+from flask_cors import CORS
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
 from ratelimit import limits, sleep_and_retry, RateLimitException
+from .extensions import db
+from .database import User, Flag, Dungeon
+from .flask_config import default
 
 import threading, os, time, subprocess, re, secrets, datetime
 
-from api import *
-from api_groups import *
-import deployGroups
-#endregion imports
-
+from .api import *
+from .api_groups import *
+from .deployGroups import Groups
+#endregion import
 #region global variables
 app = Flask(__name__)
-socketio = SocketIO(app) 
+socketio = SocketIO(app, cors_allowed_origins="*")
+CORS(app)
 statusCache = []
 #endregion global variables
 
+app.config.from_object(default)
+
+# Init Flask SQLAlchemy
+db.init_app(app)
+
+# Create database
+with app.app_context():
+    db.create_all()
 
 heartBeat()
 api_groups_init(socketio)
+
+# Blueprint routes
+from .routes import player
+app.register_blueprint(player, url_prefix='/player')
 
 #region utilites
 @sleep_and_retry
@@ -177,14 +193,14 @@ def addFirewallEntry(data):
 @socketio.on("getGroups")
 def getTemplates(data):
     groupList = []
-    for index, group in enumerate(deployGroups.Groups):
+    for index, group in enumerate(Groups):
         groupList.append({"groupID": index, "groupName": group["groupName"]})
     socketio.emit("groupList", groupList)
     
 @socketio.on("cloneGroup")
 def runCloneGroup(data):
     groupID = int(data)
-    cloneGroup(deployGroups.Groups[groupID])
+    cloneGroup(Groups[groupID])
 #endregion group actions
 
 #endregion SocketIO event channels
