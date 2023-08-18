@@ -25,7 +25,7 @@ class Flag(db.Model):
     def __repr__(self):
         return self.flag
     
-
+# Changes
 class Dungeon(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     user_id         = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
