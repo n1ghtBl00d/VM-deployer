@@ -5,13 +5,14 @@ from flask_cors import CORS
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
 from ratelimit import limits, sleep_and_retry, RateLimitException
 from .extensions import db
-from .database import User, Flag, Dungeon
+from .database import User, Flag, Dungeon, load_bosses
 from .flask_config import default
 
 import threading, os, time, subprocess, re, secrets, datetime
 
 from .api import *
 from .api_groups import *
+from .config import *
 from .deployGroups import Groups
 #endregion import
 #region global variables
@@ -29,13 +30,17 @@ db.init_app(app)
 # Create database
 with app.app_context():
     db.create_all()
+    load_bosses()
 
 heartBeat()
 api_groups_init(socketio)
 
 # Blueprint routes
-from .routes import player
+from .routes import player, flag, admin, game_stats
 app.register_blueprint(player, url_prefix='/player')
+app.register_blueprint(flag, url_prefix='/flag')
+app.register_blueprint(admin, url_prefix='/admin')
+app.register_blueprint(game_stats, url_prefix='/game')
 
 #region utilites
 @sleep_and_retry
@@ -80,7 +85,7 @@ def updateStatusCached(vmid):
 #region Flask routes
 @app.route("/")
 def hello_world():
-    return render_template('index.html', CLONE_RANGE_LOWER =CONFIG.CLONE_RANGE_LOWER, CLONE_RANGE_UPPER =CONFIG.CLONE_RANGE_UPPER)
+    return render_template('index.html', CLONE_RANGE_LOWER =CLONE_RANGE_LOWER, CLONE_RANGE_UPPER =CLONE_RANGE_UPPER)
 
 @app.route("/vnc")
 def vncConnect():
@@ -97,9 +102,9 @@ def vncConnect():
         return redirect("/")
 
     PASSWORD = secrets.token_urlsafe(8)
-    VNC_REDIRECT_URL = f"http://{CONFIG.NOVNC_IP}:{CONFIG.NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&show_dot=true&"
+    VNC_REDIRECT_URL = f"http://{NOVNC_IP}:{NOVNC_PORT}/vnc.html?autoconnect=true&resize=scale&show_dot=true&"
     setVNCPassword(vmid, PASSWORD)
-    return redirect(f"{VNC_REDIRECT_URL}path=vnc%2F{CONFIG.PROXMOX_IP}%2F{port}&password={PASSWORD}")
+    return redirect(f"{VNC_REDIRECT_URL}path=vnc%2F{PROXMOX_IP}%2F{port}&password={PASSWORD}")
 #endregion Flask routes
 
 #region SocketIO event Channels 

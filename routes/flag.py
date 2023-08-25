@@ -1,6 +1,6 @@
 from flask import Blueprint, session, request
 from ..extensions import db
-from ..database import User, Flag, Check_Flag, Bosses, Dungeon
+from ..database import User, Flag, Check_Flag, Dungeon
 from ..utils import login_required
 
 flag = Blueprint('flag', __name__)
@@ -20,7 +20,7 @@ def submit_flag():
     
     if not level.isalnum() and not boss.isalnum():
         return {'Error': 'Invalid level or boss'}, 404
-
+    print(level, boss, flag)
     if not Check_Flag.query.filter_by(level=level, boss=boss, flag=flag).first():
         return {'Error': 'Not a valid flag'}, 404
 
@@ -36,6 +36,7 @@ def submit_flag():
     boss_info.is_dead = True
     db.session.add(flag)
     db.session.commit()
+    return {'Success': 'Flag Submitted'}
 
 @flag.get('')
 @login_required
@@ -55,11 +56,5 @@ def get_submit():
     
     completed = Flag.query.filter_by(level=level, user_id=user.id).all()
 
-    bosses = Bosses.query.filter_by(level=level).first()
+    # bosses = Bosses.query.filter_by(level=level).first()
     
-
-
-
-@flag.delete('/')
-def logout():
-    pass

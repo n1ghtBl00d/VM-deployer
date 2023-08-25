@@ -15,6 +15,7 @@ def login(username, password):
     
     if user and user.check_password(password):
         session['username'] = username
+        session['role'] = user.role
         player_info = { 
             'username': username,
             'new_user': False
@@ -35,7 +36,7 @@ def register(username, password):
     if not username or not password:
         return {'error': 'Missing user data'}, 400
     
-    user = User(username=username)
+    user = User(username=username, role='user')
     if User.query.filter_by(username=username).first():
         return {'error': 'Username already taken'}, 400
 
@@ -43,6 +44,7 @@ def register(username, password):
     db.session.add(user)
     db.session.commit()
     session['username'] = username
+    session['role'] = 'user'
 
     player_info = { 
         'username': username,
@@ -51,7 +53,7 @@ def register(username, password):
     return player_info, 200
 
 
-@player.put('/player/key/<string:bossName>')
+@player.put('/key/<string:bossName>')
 @login_required
 def submit_key(bossName):
     user = User.query.filter_by(username=session['username']).first()
@@ -66,7 +68,7 @@ def submit_key(bossName):
     return {'Success': 'Key added'}, 200
 
 
-@player.get('/player/key/<string:level>')
+@player.get('/key/<string:level>')
 @login_required
 def get_keys(level):
     user = User.query.filter_by(username=session['username']).first()

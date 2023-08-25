@@ -49,6 +49,7 @@ class User(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     username        = db.Column(db.String(50), unique=True, nullable=False)
     password_hash   = db.Column(db.String(128), nullable=False)
+    role            = db.Column(db.String(50), nullable=False)
     flags           = db.relationship('Flag', backref='user', lazy='dynamic')
 
     def __repr__(self):
@@ -63,7 +64,7 @@ class User(db.Model):
 class Boss_Info(db.Model):
     id              = db.Column(db.Integer, primary_key=True)
     level           = db.Column(db.String(50), nullable=False)
-    boss            = db.Column(db.String(256), nullable=False)
+    boss            = db.Column(db.String(256), unique=True, nullable=False)
     description     = db.Column(db.String(256), nullable=False)
     vmid            = db.Column(db.Integer, nullable=False)
     strengths       = db.Column(db.String(256), nullable=False)
@@ -72,7 +73,7 @@ class Boss_Info(db.Model):
 
 
     def __repr__(self):
-        return self.user_id
+        return self.level
     
 # class Boss_
 
@@ -105,7 +106,4 @@ class Dungeon(db.Model):
     is_dead         = db.Column(db.Boolean, nullable=False)
 
     def __repr__(self):
-        return {
-            'dungeon' : self.dugeon_level,
-            'level'   : self.level
-        }
+        return str(self.user_id)
