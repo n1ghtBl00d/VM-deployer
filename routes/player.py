@@ -2,6 +2,7 @@ from flask import Blueprint, request, session
 from ..database import User, Flag, Dungeon
 from ..extensions import db
 from ..utils import user_data, login_required
+from flask_cors import cross_origin
 
 player = Blueprint('player', __name__)
 

@@ -1,5 +1,5 @@
 #region imports
-from flask import Flask
+from flask import Flask, session
 from flask_socketio import SocketIO
 from flask_cors import CORS
 from flask import Flask, render_template, request, redirect, url_for, make_response, Response
@@ -7,6 +7,7 @@ from ratelimit import limits, sleep_and_retry, RateLimitException
 from .extensions import db
 from .database import User, Flag, Dungeon, load_bosses
 from .flask_config import default
+from .utils import login_required
 
 import threading, os, time, subprocess, re, secrets, datetime
 
@@ -18,7 +19,7 @@ from .deployGroups import Groups
 #region global variables
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
-CORS(app)
+CORS(app, supports_credentials=True)
 statusCache = []
 #endregion global variables
 
@@ -37,12 +38,17 @@ api_groups_init(socketio)
 
 # Blueprint routes
 from .routes import player, flag, admin, game_stats
-app.register_blueprint(player, url_prefix='/player')
-app.register_blueprint(flag, url_prefix='/flag')
-app.register_blueprint(admin, url_prefix='/admin')
-app.register_blueprint(game_stats, url_prefix='/game')
+app.register_blueprint(player, url_prefix='/api/player')
+app.register_blueprint(flag, url_prefix='/api/flag')
+app.register_blueprint(admin, url_prefix='/api/admin')
+app.register_blueprint(game_stats, url_prefix='/api/game')
 
 #region utilites
+def saveSocket(username):
+    user = User.query.filter_by(username=username).first()
+
+    # user.
+
 @sleep_and_retry
 @limits(calls=3, period=10) # Max 3 calls per 10 seconds
 def updateStatusWrapper(vmid):
@@ -108,6 +114,10 @@ def vncConnect():
 #endregion Flask routes
 
 #region SocketIO event Channels 
+@socketio.event
+def connect(data):
+    if 'username' in session:
+        session['sid'] = request.sid
 
 #region Individual actions
 @socketio.on("getTemplates")
@@ -116,14 +126,21 @@ def getTemplates(data):
     socketio.emit("TemplateList", templates)
 
 @socketio.on("cloneTemplate")
+# @login_required
 def cloneTemplate(data):
     templateId = int(data)
+    session['username'] = 'darkon3'
+    machine = getMachineExists(session['username'], templateId)
+    if machine:
+        socketio.emit("vmEntry", {"name": machine["name"], "status": machine["status"], "ip": machine["ip"]}, room=request.sid)
+        return
+
     nextid = getNextId()
-    socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid})
-    newid = create(templateId, nextid)
-    socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid})
+    socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid}, room=request.sid)
+    newid = create(templateId, nextid, session['username'])
+    socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid}, room=request.sid)
     start(newid)
-    socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid})
+    socketio.emit("statusUpdate", {"status": "VM Online", "newID": nextid}, room=request.sid)
     statusThread = threading.Timer(15, updateStatusWrapper, args=[newid])
     statusThread.start()
     
@@ -140,6 +157,20 @@ def delAll(data):
         socketio.emit("statusUpdate", {"status": "Deleting", "newID": vm})
         deleteVM(vm)
         socketio.emit("statusUpdate", {"status": "Deleted", "newID": vm})
+
+@socketio.on("updateUserStatus")
+def updateUserStatus():
+
+    machines = getUserMachines(session['username'])
+    userMachines = []
+    for machine in machines:
+        if machine['status'] == 'running':
+            userMachines.append({
+                'ip': getIP(int(machine['vmid'])),
+                'name': machine['name']
+            })
+    print(f'sent - {userMachines}')
+    socketio.emit("vmListEntry", userMachines, room=request.sid)
 
 @socketio.on("updateAllStatus")
 def updateAllStatus(data):
@@ -178,10 +209,11 @@ def revertState(data):
 
 @socketio.on("reboot")
 def reboot(data):
+    print('I AM HERE')
     vmid = data['vmid']
-    socketio.emit("statusUpdate", {"status": "Rebooting", "newID": vmid})
+    socketio.emit("statusUpdate", {"status": "Rebooting", "newID": vmid}, room=request.sid)
     reboot(vmid)
-    socketio.emit("statusUpdate", {"status": "Rebooted", "newID": vmid})
+    socketio.emit("statusUpdate", {"status": "Rebooted", "newID": vmid}, room=request.sid)
 
 @socketio.on("addFirewallEntry")
 def addFirewallEntry(data):

@@ -19,10 +19,13 @@ ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
 macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
 vncPattern = re.compile(r':\s*(\d*)')
 
-
+print(API_PORT)
 proxmox = ProxmoxAPI(
     API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=SSL_VERIFY, port=API_PORT
 )
+for node in proxmox.nodes.get():
+    for vm in proxmox.nodes(node["node"]).qemu.get():
+        print(f"{vm['vmid']}. {vm['name']} => {vm['status']}")
 #endregion global variables
 
 #region utilities
@@ -133,6 +136,7 @@ def getTemplateVMs():
 def getType(vmid):
     lxcs = getLXCs() + getTemplateLXCs()
     vms = getVMs() + getTemplateVMs()
+
     if vmid in lxcs:
         return "lxc"
     if vmid in vms:
@@ -144,7 +148,7 @@ def getVNCports():
     ports = []
     for vm in proxmox.nodes(PROXMOX_NODE).qemu.get():
         vmid = int(vm["vmid"])
-        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).get() #Get ports from all vms, not just clones
+        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config().get() #Get ports from all vms, not just clones
         if("args" in keys()):
             args = config["args"]
             port = str(vncPattern.search(args)[1])
@@ -152,7 +156,7 @@ def getVNCports():
     return ports
 
 def checkTemplateVNC(templateId):
-    config = proxmox.nodes(PROXMOX_NODE).qemu(templateId).get()
+    config = proxmox.nodes(PROXMOX_NODE).qemu(templateId).config().get()
     description = config["description"]
     if "[!ENABLE_VNC]" in description:
         return True
@@ -162,33 +166,66 @@ def checkTemplateVNC(templateId):
 def getName(vmid):
     hostType = getType(vmid)
     if hostType == "lxc":
-        config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).get()
+        config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).config().get()
         description = config["description"]
         name = description.partition('\n')[0][2:]
         return name
     if hostType == "vm":
-        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).get()
+        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config().get()
         description = config["description"]
         name = description.partition('\n')[0][2:]
         return name
     #If Error:
     return "Name Not Found"
 
+def getUserMachines(username):
+    lxcs = proxmox.nodes(PROXMOX_NODE).lxc.get()
+    vms  = proxmox.nodes(PROXMOX_NODE).qemu.get()
+    machines = lxcs + vms 
+    userMachines = []
+
+    for machine in machines:
+        if machine.get('tags') == username:
+            userMachines.append(machine)
+
+    return userMachines
+
+def getMachineExists(username, vmid):
+    name = clean_string(getName(vmid))
+    userMachine = {}
+    machines = getUserMachines(username)
+    
+    for machine in machines:
+        if machine.get('name') == name:
+            userMachine = machine
+            break
+
+    if userMachine:
+        if userMachine['status'] == 'stopped':
+            print('STARTING', userMachine)
+            startTask = proxmox(f"nodes/{PROXMOX_NODE}/{userMachine['type']}/{userMachine['vmid']}/status/start").post()
+            waitOnTask(startTask)
+        return {
+            'ip': getIP(int(userMachine['vmid'])),
+            'name': userMachine.get('name', 'N/A'),
+            'status': userMachine['status']
+        }
+    return {}
 
 def getNameLXC(vmid):
-    config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).get()
+    config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).config().get()
     description = config["description"]
     name = description.partition('\n')[0][2:]
     return name
 
 def getNameVM(vmid):
-    config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).get()
+    config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config().get()
     description = config["description"]
     name = description.partition('\n')[0][2:]
     return name
 
 def getAllTemplates():
-    templates = []
+    templates = [] 
     lxcs = getTemplateLXCs()
     vms = getTemplateVMs()
     for lxc in lxcs:
@@ -223,11 +260,11 @@ def getNextVncPort():
 def getIP(vmid):
     hostType = getType(vmid)
     if hostType == "lxc":
-        config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).get()
+        config = proxmox.nodes(PROXMOX_NODE).lxc(vmid).config().get()
         mac = str(macPattern.search(str(config))[0])
         return findIPbyMAC(mac)
     if hostType == "vm":
-        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).get()
+        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config().get()
         mac = str(macPattern.search(str(config))[0])
         return findIPbyMAC(mac)
     return "N/A"
@@ -254,7 +291,10 @@ def arpScan():
     resultString = ""
     resultsArr = []
     for network in NETWORKS:
-        resultString += str(subprocess.check_output(f"arp-scan -I {network['interface']} {network['address']}", shell=True).decode('utf-8')).lower()
+        try:
+            resultString += str(subprocess.check_output(f"arp-scan -I {network['interface']} {network['address']}", shell=True).decode('utf-8')).lower()
+        except Exception as e:
+            pass
     results = resultString.split("\n")
     for result in results:
         if(ipPattern.search(result)):
@@ -286,18 +326,18 @@ def addFirewallAllowedIP(vmid, ipAddr, interface="net0"):
 #region basic VM functions
 
 #region Create()
-def create(cloneid, newid, name="default", vnc=None):
+def create(cloneid, newid, username, name="default", vnc=None):
     hostType = getType(cloneid)
     if (hostType == "lxc"):
-        return createLXC(cloneid, newid, name)
+        return createLXC(cloneid, newid, username, name)
     if (hostType == "vm"):
-        return createVM(cloneid, newid, name, vnc)
+        return createVM(cloneid, newid, username, name, vnc)
     
 
 @backoff.on_exception(backoff.constant, requests.exceptions.ReadTimeout, interval=10, max_tries = 5)
 @sleep_and_retry
 @limits(calls=1, period=30) #Max 1 call per 30 seconds
-def createLXC(cloneid, newId, name="default"):
+def createLXC(cloneid, newId, username, name="default"):
     if(name == "default"):
         name = getNameLXC(cloneid)
     name = clean_string(name.strip())
@@ -306,14 +346,15 @@ def createLXC(cloneid, newId, name="default"):
         waitOnTask(cloneTask)
         snapshotTask = proxmox.nodes(PROXMOX_NODE).lxc(newId).snapshot.post(vmid=newId, node=PROXMOX_NODE, snapname="initState")
         waitOnTask(snapshotTask)
+        proxmox.nodes(PROXMOX_NODE).lxc(newId).config().put(tags=username)
         return newId
     except core.ResourceException:
-        return createLXC(cloneid, getNextId(), name)
+        return createLXC(cloneid, getNextId(), username, name)
 
 @backoff.on_exception(backoff.expo, (requests.exceptions.ReadTimeout, requests.exceptions.ReadTimeout), max_tries = 5)
 @sleep_and_retry
 @limits(calls=1, period=30) #Max 1 call per 30 seconds
-def createVM(cloneid, newId, name="default", vnc=None):
+def createVM(cloneid, newId, username, name="default", vnc=None):
     if(name == "default"):
         name = getNameVM(cloneid)
     name = clean_string(name.strip())
@@ -326,9 +367,12 @@ def createVM(cloneid, newId, name="default", vnc=None):
             setupVNC(newId)
         snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).snapshot.post(vmid=newId, node=PROXMOX_NODE, snapname="initState")
         waitOnTask(snapshotTask)
+        setTagTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).config(tags=username).put()
+        print('Cloning ' + cloneid)
+        waitOnTask(setTagTask)
         return newId
     except core.ResourceException:
-        return createVM(cloneid, getNextId(), name, vnc)
+        return createVM(cloneid, getNextId(), username, name, vnc)
     
 #endregion create()
 

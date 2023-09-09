@@ -33,3 +33,37 @@ def admin_required(f):
         
         return f(*args, **kwargs)
     return decorated_function
+
+def get_headers(header):
+    headers = {
+        "users": [
+            'Username',
+            'Score',
+            'Role'
+        ],
+        "dungeon": [
+            "Level",
+            "Boss",
+            "Description",
+            "VMID",
+            "Strengths",
+            "Weaknesses",
+            "Graphic key"
+        ],
+        "flag": [
+            "Level",
+            "Boss",
+            "Flag"
+        ]
+    }
+    
+    return headers.get(header.lower(), {})
+
+def get_levels():
+    return [
+        'dungeonOne',
+        'dungeonTwo',
+        'dungeonThree',
+        'dungeonFour',
+        'dungeonFive',
+    ]

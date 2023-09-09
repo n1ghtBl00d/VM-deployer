@@ -10,6 +10,7 @@ game_stats = Blueprint('game_stats', __name__)
 @game_stats.get('/<string:level>')
 @login_required
 def get_game_stats(level):
+    print(request.cookies)
     username = session['username']
     user = User.query.filter_by(username=username).first()
     if not user:
@@ -39,8 +40,9 @@ def get_game_stats(level):
                 "is_dead" : dungeon_stat.is_dead,
                 "details" : {}
             }
-    print(game_stats)
+
     for info in boss_info:
+        print(info.boss)
         game_stats[info.boss]['details'] = {
             "name": info.boss,
             "description" : info.description,
