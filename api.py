@@ -368,7 +368,6 @@ def createVM(cloneid, newId, username, name="default", vnc=None):
         snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).snapshot.post(vmid=newId, node=PROXMOX_NODE, snapname="initState")
         waitOnTask(snapshotTask)
         setTagTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).config(tags=username).put()
-        print('Cloning ' + cloneid)
         waitOnTask(setTagTask)
         return newId
     except core.ResourceException:

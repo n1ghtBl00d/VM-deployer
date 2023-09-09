@@ -44,10 +44,6 @@ app.register_blueprint(admin, url_prefix='/api/admin')
 app.register_blueprint(game_stats, url_prefix='/api/game')
 
 #region utilites
-def saveSocket(username):
-    user = User.query.filter_by(username=username).first()
-
-    # user.
 
 @sleep_and_retry
 @limits(calls=3, period=10) # Max 3 calls per 10 seconds
@@ -114,10 +110,6 @@ def vncConnect():
 #endregion Flask routes
 
 #region SocketIO event Channels 
-@socketio.event
-def connect(data):
-    if 'username' in session:
-        session['sid'] = request.sid
 
 #region Individual actions
 @socketio.on("getTemplates")
@@ -129,13 +121,14 @@ def getTemplates(data):
 # @login_required
 def cloneTemplate(data):
     templateId = int(data)
-    session['username'] = 'darkon3'
+    session['username'] = 'darkon3' # for testing reasons
     machine = getMachineExists(session['username'], templateId)
     if machine:
         socketio.emit("vmEntry", {"name": machine["name"], "status": machine["status"], "ip": machine["ip"]}, room=request.sid)
         return
 
     nextid = getNextId()
+    # This will need to be updated so it doesn't return ALL machines to user
     socketio.emit("statusUpdate", {"status": "Creating VM", "newID": nextid}, room=request.sid)
     newid = create(templateId, nextid, session['username'])
     socketio.emit("statusUpdate", {"status": "Starting VM", "newID": nextid}, room=request.sid)
@@ -169,7 +162,7 @@ def updateUserStatus():
                 'ip': getIP(int(machine['vmid'])),
                 'name': machine['name']
             })
-    print(f'sent - {userMachines}')
+
     socketio.emit("vmListEntry", userMachines, room=request.sid)
 
 @socketio.on("updateAllStatus")
@@ -209,7 +202,6 @@ def revertState(data):
 
 @socketio.on("reboot")
 def reboot(data):
-    print('I AM HERE')
     vmid = data['vmid']
     socketio.emit("statusUpdate", {"status": "Rebooting", "newID": vmid}, room=request.sid)
     reboot(vmid)
