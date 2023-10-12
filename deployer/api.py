@@ -1,0 +1,607 @@
+#region imports
+from flask import g
+from proxmoxer import ProxmoxAPI, core
+import threading, os, time, subprocess, re, urllib.parse, datetime, requests
+from ratelimit import limits, sleep_and_retry, RateLimitException
+import backoff
+from .extensions import db
+from .database import Machines, Templates
+
+# import .config as CONFIG 
+from .config import *
+#endregion imports
+
+#region global variables
+arpResult = {
+    "results": [],
+    "updateTime": datetime.datetime(1970, 1, 1)
+}
+
+ipPattern = re.compile(r'\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b')
+macPattern = re.compile(r'([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})')
+vncPattern = re.compile(r':\s*(\d*)')
+
+print(API_PORT)
+proxmox = ProxmoxAPI(
+    API_URL, user=API_USERNAME, password=API_PASSWORD, verify_ssl=SSL_VERIFY, port=API_PORT
+)
+
+#endregion global variables
+
+#region utilities
+
+
+def waitOnTask(task_id):
+    print("WAITING", flush=True)
+    data = {"status": ""}
+    while (data["status"] != "stopped"):
+        data = proxmox.nodes(g.proxmox_node).tasks(task_id).status.get()
+    print("DONE WAITING", flush=True)
+
+def clean_string(string):
+    cleaned = []
+    for char in string:
+        if char.isalnum():
+            cleaned.append(char)
+        elif char.isspace():
+            cleaned.append("-")
+        elif (char == '.'):
+            cleaned.append(char)
+        elif (char == '-'):
+            cleaned.append(char)
+    return "".join(cleaned)
+
+#region updateStatus()
+def updateStatus(vmid):
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        return updateStatusLXC(vmid)
+    if (hostType == "vm"):
+        return updateStatusVM(vmid)
+    
+def updateStatusLXC(lxc):
+    status = proxmox.nodes(g.proxmox_node).lxc(lxc).status.current.get()
+    if status["status"] == "running":
+        ipAddr = getIP(lxc)
+    else:
+        ipAddr = "n/a"
+
+    statusEntry = {
+        "vmid": lxc,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": False,
+        "type": status["type"],
+        "tag": status.get("tags", None)
+    }
+    return statusEntry
+
+def updateStatusVM(vm):
+    status = proxmox.nodes(g.proxmox_node).qemu(vm).status.current.get()
+    vncPorts = getVNCports()
+    vncEnabled = False
+    for entry in vncPorts:
+        if entry["vmid"] == vm:
+            vncEnabled = True
+            break
+    if status["status"] == "running":
+        ipAddr = getIP(vm)   
+    else:
+        ipAddr = "n/a" 
+    statusEntry = {
+        "vmid": vm,
+        "name": status["name"],
+        "status": status["status"],
+        "ipAddr": ipAddr,
+        "vncStatus": vncEnabled
+    }
+    return statusEntry
+#endregion updateStatus()
+
+#endregion utilites
+
+#region updateTemplates
+
+def updateMachines(statusEntry, node):
+    # user_machine = Machines.query.filter_by(username=statusEntry['tag'], machine_id=statusEntry['vmid']).first()
+    template = Templates.query.filter_by(template_clean=statusEntry["name"]).first()
+
+    if template is None:
+        return None
+
+    # if user_machine:
+    #     user_machine.ip = statusEntry["ipAddr"]
+    #     db.session.commit()
+    #     return None
+    machine = Machines(
+        username        = statusEntry['tag'],
+        template_id     = template.template_id,
+        machine_id      = statusEntry["vmid"],
+        ip              = statusEntry["ipAddr"],
+        machine_name    = statusEntry["name"],
+        cluster_node    = node,
+        created         = datetime.datetime.now(),
+        type            = statusEntry['type']
+    )
+
+    return machine
+
+def renewMachines():
+    all_machines = []
+    for node in PROXMOX_NODE:
+        print("UPDATING MACHINES")
+        g.proxmox_node = node
+        lxcs = getLXCs()
+        vms = getVMs()
+        Machines.query.delete()
+        for lxc in lxcs:
+            statusEntry = updateStatusLXC(lxc)
+            print("STATUSES AND ALL", statusEntry)
+            if statusEntry['tag'] is None:
+                continue
+            print("GETTING MACHINE")
+            machine = updateMachines(statusEntry, node)
+            print("THIS IS MACHINE", machine)
+            if machine:
+                all_machines.append(machine)
+
+        for vm in vms:
+            statusEntry = updateStatusVM(vm)
+            if statusEntry['tag'] is None:
+                continue
+
+            machine = updateMachines(statusEntry, node)
+
+            if machine:
+                all_machines.append(machine)
+    print("UPDATING MACHINES", all_machines)
+    try:
+        db.session.bulk_save_objects(all_machines)
+        db.session.commit()
+    except Exception as e:
+        print("ERRROROR*****************", e)
+
+def renewTemplates():
+        g.proxmox_node = PROXMOX_NODE[0]
+        Templates.query.delete()
+        db.session.commit()
+        save_all_templates = []
+        all_templates = getAllTemplates()
+        for template in all_templates:
+            save_all_templates.append(
+                Templates(
+                    template_id = template['vmid'],
+                    template_name = template['name'],
+                    template_clean = clean_string(template['name'])
+                )
+            )
+        db.session.bulk_save_objects(save_all_templates)
+        db.session.commit()
+
+#endregion updateTemplates
+
+#region get info
+def getLXCs(admin_all=False):
+    lxcs = []
+    try:
+        if admin_all:
+            for node in PROXMOX_NODE:
+                lxcs_machines + proxmox.nodes(node).lxc.get()
+        else:
+            lxcs_machines = proxmox.nodes(g.proxmox_node).lxc.get()
+    except Exception as e:
+        print('ALL MACHINE ERROR', e, flush=True)
+        lxcs_machines = []
+
+    for lxc in lxcs_machines:
+        lxcs.append(int(lxc["vmid"]))
+    lxcs[:] = [x for x in lxcs if (x >= CLONE_RANGE_LOWER and x <= CLONE_RANGE_UPPER)]
+    lxcs.sort()
+    print('ALL MACHINE', lxcs, flush=True)
+    return lxcs
+
+def getVMs(admin_all=False):
+    vms = []
+    try:
+        if admin_all:
+            for node in PROXMOX_NODE:
+                vms_machines + proxmox.nodes(node).qemu.get()
+        else:
+            vms_machines = proxmox.nodes(g.proxmox_node).qemu.get()
+    except:
+        vms_machines = []
+
+    for vm in vms_machines:
+        vms.append(int(vm["vmid"]))
+    vms[:] = [x for x in vms if (x >= CLONE_RANGE_LOWER and x <= CLONE_RANGE_UPPER)]
+    vms.sort()
+    return vms
+
+def getTemplateLXCs():
+    lxcs = []
+    try:
+        lxcs_machines = proxmox.nodes(g.proxmox_node).lxc.get()
+    except Exception as e:
+        print('TEMPLATES ERROR', e, flush=True)
+        lxcs_machines = []
+
+    for lxc in lxcs_machines:
+        lxcs.append(int(lxc["vmid"]))
+    lxcs[:] = [x for x in lxcs if (x >= TEMPLATE_RANGE_LOWER and x <= TEMPLATE_RANGE_UPPER)]
+    lxcs.sort()
+    return lxcs
+
+def getTemplateVMs():
+    vms = []
+    try:
+        vms_machine = proxmox.nodes(g.proxmox_node).qemu.get()
+    except:
+        vms_machine = []
+
+    for vm in vms_machine:
+        vms.append(int(vm["vmid"]))
+    vms[:] = [x for x in vms if (x >= TEMPLATE_RANGE_LOWER and x <= TEMPLATE_RANGE_UPPER)]
+    vms.sort()
+    return vms
+
+def getType(vmid):
+    lxcs = getLXCs() + getTemplateLXCs()
+    vms = getVMs() + getTemplateVMs()
+
+    if vmid in lxcs:
+        return "lxc"
+    if vmid in vms:
+        return "vm"
+    else:
+        return "error"
+
+def getVNCports():
+    ports = []
+    for vm in proxmox.nodes(PROXMOX_NODE).qemu.get():
+        vmid = int(vm["vmid"])
+        config = proxmox.nodes(PROXMOX_NODE).qemu(vmid).config().get() #Get ports from all vms, not just clones
+        try:
+            if("args" in keys()):
+                args = config["args"]
+                port = str(vncPattern.search(args)[1])
+                ports.append({"vmid": vmid, "port": int(port)})
+        except:
+            pass
+    return ports
+
+def checkTemplateVNC(templateId):
+    config = proxmox.nodes(PROXMOX_NODE).qemu(templateId).config().get()
+    description = config["description"]
+    if "[!ENABLE_VNC]" in description:
+        return True
+    else:
+        return False
+
+def getName(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        config = proxmox.nodes(g.proxmox_node).lxc(vmid).config().get()
+        description = config["description"]
+        name = description.partition('\n')[0][2:]
+        return name
+    if hostType == "vm":
+        config = proxmox.nodes(g.proxmox_node).qemu(vmid).config().get()
+        description = config["description"]
+        name = description.partition('\n')[0][2:]
+        return name
+    #If Error:
+    return "Name Not Found"
+
+def getUserMachine(username, vmid):
+    user_machine = Machines.query.filter_by(username=username, template_id=vmid).first()
+
+    if user_machine:
+        return {
+            "name": user_machine.machine_name,
+            "ip": user_machine.ip
+        }
+    return {}
+
+def getNameLXC(vmid):
+    config = proxmox.nodes(g.proxmox_node).lxc(vmid).config().get()
+    description = config["description"]
+    name = description.partition('\n')[0][2:]
+    return name
+
+def getNameVM(vmid):
+    config = proxmox.nodes(g.proxmox_node).qemu(vmid).config().get()
+    description = config["description"]
+    name = description.partition('\n')[0][2:]
+    return name
+
+def getAllTemplates():
+    templates = [] 
+    lxcs = getTemplateLXCs()
+    vms = getTemplateVMs()
+    for lxc in lxcs:
+        templates.append({"vmid": lxc, "name": getName(lxc)})
+    for vm in vms:
+        templates.append({"vmid": vm, "name": getName(vm)})
+    return templates
+
+
+def getNextId():
+    lxcs = getLXCs()
+    vms = getVMs()
+    ids = lxcs + vms
+    if (ids == []):
+        return CLONE_RANGE_LOWER
+    else:
+        for x in range(CLONE_RANGE_LOWER, CLONE_RANGE_UPPER):
+            if x not in ids:
+                return x
+
+def getNextVncPort():
+    ports = getVNCports()
+    if(ports == []):
+        return 1
+    else:
+        for x in range(1, 99):
+            if not any((p["port"]) == x for p in ports):
+                return x
+#endregion get info
+
+#region Networking
+def getIP(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        config = proxmox.nodes(g.proxmox_node).lxc(vmid).config().get()
+        mac = str(macPattern.search(str(config))[0])
+        return findIPbyMAC(mac)
+    if hostType == "vm":
+        config = proxmox.nodes(g.proxmox_node).qemu(vmid).config().get()
+        mac = str(macPattern.search(str(config))[0])
+        return findIPbyMAC(mac)
+    return "N/A"
+
+def findIPbyMAC(mac):
+    mac = mac.lower()
+    now = datetime.datetime.now()
+    if (arpResult["updateTime"] < now-datetime.timedelta(seconds=60)):
+        arpScan()
+    for result in arpResult["results"]:
+        if result[1] == mac:
+            return result[0]
+    
+    #If not found, try again but force arp scan
+    arpScan()
+    for result in arpResult["results"]:
+        if result[1] == mac:
+            return result[0]
+    
+    #If not found
+    return "Not Found"
+
+def arpScan():
+    resultString = ""
+    resultsArr = []
+    for network in NETWORKS:
+        try:
+            resultString += str(subprocess.check_output(f"arp-scan -I {network['interface']} {network['address']}", shell=True).decode('utf-8')).lower()
+        except Exception as e:
+            pass
+    results = resultString.split("\n")
+    for result in results:
+        if(ipPattern.search(result)):
+            values = result.split("\t")
+            resultsArr.append((values[0], values[1]))
+    arpResult["results"] = resultsArr
+    arpResult["updateTime"] = datetime.datetime.now()
+
+
+#region firewall
+def enableFirewall(vmid):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        firewallTask = proxmox.nodes(PROXMOX_NODE).lxc(vmid).firewall.options.put(node=PROXMOX_NODE, vmid=vmid, enable=1)
+    if hostType == "vm":
+        firewallTask = proxmox.nodes(PROXMOX_NODE).qemu(vmid).firewall.options.put(node=PROXMOX_NODE, vmid=vmid, enable=1)
+
+def addFirewallAllowedIP(vmid, ipAddr, interface="net0"):
+    hostType = getType(vmid)
+    if hostType == "lxc":
+        proxmox.nodes(PROXMOX_NODE).lxc(vmid).firewall.rules.post(node=PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
+    if hostType == "vm":
+        proxmox.nodes(PROXMOX_NODE).qemu(vmid).firewall.rules.post(node=PROXMOX_NODE, vmid=vmid, enable=1, type="in", action="ACCEPT", log="nolog", source=ipAddr, iface=interface)
+#endregion firewall
+
+
+#endregion Netowrking
+
+#region basic VM functions
+
+#region Create()
+def create(cloneid, newid, username, name="default", vnc=None):
+    hostType = getType(cloneid)
+    if (hostType == "lxc"):
+        return createLXC(cloneid, newid, username, name)
+    if (hostType == "vm"):
+        return createVM(cloneid, newid, username, name, vnc)
+    
+
+@backoff.on_exception(backoff.constant, requests.exceptions.ReadTimeout, interval=10, max_tries = 5)
+@sleep_and_retry
+@limits(calls=1, period=30) #Max 1 call per 30 seconds
+def createLXC(cloneid, newId, username, name="default"):
+    print("CREATE", g.proxmox_node, flush=True)
+    if(name == "default"):
+        name = getNameLXC(cloneid)
+    name = clean_string(name.strip())
+    try:
+        cloneTask = proxmox.nodes(g.proxmox_node).lxc(cloneid).clone.post(newid=newId, node=g.proxmox_node, vmid=cloneid, pool=VM_POOL, hostname=name)
+        waitOnTask(cloneTask)
+        snapshotTask = proxmox.nodes(g.proxmox_node).lxc(newId).snapshot.post(vmid=newId, node=g.proxmox_node, snapname="initState")
+        waitOnTask(snapshotTask)
+        proxmox.nodes(g.proxmox_node).lxc(newId).config().put(tags=username)
+        return newId
+    except core.ResourceException:
+        return createLXC(cloneid, getNextId(), username, name)
+
+@backoff.on_exception(backoff.expo, (requests.exceptions.ReadTimeout, requests.exceptions.ReadTimeout), max_tries = 5)
+@sleep_and_retry
+@limits(calls=1, period=30) #Max 1 call per 30 seconds
+def createVM(cloneid, newId, username, name="default", vnc=None):
+    if(name == "default"):
+        name = getNameVM(cloneid)
+    name = clean_string(name.strip())
+    if(vnc == None):
+        vnc = checkTemplateVNC(cloneid)
+    try:
+        cloneTask = proxmox.nodes(PROXMOX_NODE).qemu(cloneid).clone.post(newid=newId, node=PROXMOX_NODE, vmid=cloneid, pool=VM_POOL, name=name)
+        waitOnTask(cloneTask)
+        if(vnc == True):
+            setupVNC(newId)
+        snapshotTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).snapshot.post(vmid=newId, node=PROXMOX_NODE, snapname="initState")
+        waitOnTask(snapshotTask)
+        setTagTask = proxmox.nodes(PROXMOX_NODE).qemu(newId).config(tags=username).put()
+        waitOnTask(setTagTask)
+        return newId
+    except core.ResourceException:
+        return createVM(cloneid, getNextId(), username, name, vnc)
+    
+#endregion create()
+
+#region start()    
+def start(vmid):
+    print("STARTING", flush=True)
+    hostType = getType(vmid)
+    if (hostType == "lxc"):
+        startLXC(vmid)
+    if (hostType == "vm"):
+        startVM(vmid)
+    print("STARTING DONE", flush=True)
+
+def startLXC(vmid):
+    print("LXC", flush=True)
+    startTask = proxmox.nodes(g.proxmox_node).lxc(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+    waitOnTask(startTask)
+
+def startVM(vmid):
+    startTask = proxmox.nodes(g.proxmox_node).qemu(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+    waitOnTask(startTask)
+
+#endregion start()
+
+#region revert()
+def revert(vmid, type, role='user'):
+    if role == 'admin':
+        hostType = getType(vmid)
+    else:
+        hostType = type
+        
+    if (hostType == "lxc"):
+        revertLXC(vmid)
+    if (hostType == "vm"):
+        revertVM(vmid)
+
+def revertLXC(vmid):
+    revertTask = proxmox.nodes(g.proxmox_node).lxc(vmid).snapshot("initState").rollback.post(node=g.proxmox_node, vmid=vmid, snapname="initState")
+    waitOnTask(revertTask)
+    startTask = proxmox.nodes(g.proxmox_node).lxc(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+    waitOnTask(startTask)
+
+def revertVM(vmid):
+    revertTask = proxmox.nodes(g.proxmox_node).qemu(vmid).snapshot("initState").rollback.post(node=g.proxmox_node, vmid=vmid, snapname="initState")
+    waitOnTask(revertTask)
+    startTask = proxmox.nodes(g.proxmox_node).qemu(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+    waitOnTask(startTask)
+#endregion revert()
+
+#region reboot()
+def reboot(vmid, type, role='user'):
+    if role == 'admin':
+        hostType = getType(vmid)
+    else:
+        hostType = type
+
+    if (hostType == "lxc"):
+        rebootLXC(vmid)
+    if (hostType == "vm"):
+        rebootVM(vmid)
+
+def rebootLXC(vmid):
+    status = proxmox.nodes(g.proxmox_node).lxc(vmid).status.current.get()
+    if status["status"] == "running":
+        restartTask = proxmox.nodes(g.proxmox_node).lxc(vmid).status.reboot.post(node=g.proxmox_node, vmid=vmid)
+        waitOnTask(restartTask)
+    else:
+        startTask = proxmox.nodes(g.proxmox_node).lxc(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+        waitOnTask(startTask)
+        
+def rebootVM(vmid):
+    status = proxmox.nodes(g.proxmox_node).qemu(vmid).status.current.get()
+    if status["status"] == "running":
+        restartTask = proxmox.nodes(g.proxmox_node).qemu(vmid).status.reboot.post(node=g.proxmox_node, vmid=vmid)
+        waitOnTask(restartTask)
+    else:
+        startTask = proxmox.nodes(g.proxmox_node).qemu(vmid).status.start.post(node=g.proxmox_node, vmid=vmid)
+        waitOnTask(startTask)
+#endregion reboot()
+
+#region shutdown()
+def shutdown(delId):
+    hostType = getType(delId)
+    if (hostType == "lxc"):
+        shutdownLXC(delId)
+    if (hostType == "vm"):
+        shutdownVM(delId)
+
+def shutdownLXC(delId):
+    status = proxmox.nodes(g.proxmox_node).lxc(delId).status.current.get()
+    if(status["status"] != "stopped"):
+        shutdownTask = proxmox.nodes(g.proxmox_node).lxc(delId).status.stop.post(node=g.proxmox_node, vmid=delId)
+        waitOnTask(shutdownTask)
+
+def shutdownVM(delId):
+    status = proxmox.nodes(g.proxmox_node).qemu(delId).status.current.get()
+    if(status["status"] != "stopped"):
+        shutdownTask = proxmox.nodes(g.proxmox_node).qemu(delId).status.stop.post(node=g.proxmox_node, vmid=delId)
+        waitOnTask(shutdownTask)
+#endregion shutdown()
+
+#region delete()
+def delete(delId):
+    hostType = getType(delId)
+    if (hostType == "lxc"):
+        deleteLXC(delId)
+    if (hostType == "vm"):
+        deleteVM(delId)
+
+    Machines.query.filter_by(machine_id=delId).delete()
+    db.session.commit()
+
+def deleteLXC(delId):
+    status = proxmox.nodes(g.proxmox_node).lxc(delId).status.current.get()
+    if(status["status"] != "stopped"):
+        shutdownTask = proxmox.nodes(g.proxmox_node).lxc(delId).status.stop.post(node=g.proxmox_node, vmid=delId)
+        waitOnTask(shutdownTask)
+    deleteTask = proxmox.nodes(g.proxmox_node).lxc(delId).delete()
+    waitOnTask(deleteTask)
+
+def deleteVM(delId):
+    status = proxmox.nodes(g.proxmox_node).qemu(delId).status.current.get()
+    if(status["status"] != "stopped"):
+        shutdownTask = proxmox.nodes(g.proxmox_node).qemu(delId).status.stop.post(node=g.proxmox_node, vmid=delId)
+        waitOnTask(shutdownTask)
+    deleteTask = proxmox.nodes(g.proxmox_node).qemu(delId).delete()
+    waitOnTask(deleteTask)
+#endregion delete()
+
+#endregion basic VM functions
+
+#region vnc
+def setupVNC(vmid):
+    port = getNextVncPort()
+    argsString = f"-vnc 0.0.0.0:{port},password=on"
+    proxmox.nodes(PROXMOX_NODE).qemu(vmid).put(node=PROXMOX_NODE, vmid=vmid, args=argsString)
+
+def setVNCPassword(vmid, password):
+    command = urllib.parse.quote(f'set_password vnc {password} -d vnc2')
+    proxmox(f"nodes/{PROXMOX_NODE}/qemu/{vmid}/monitor?command={command}").post() #Had to use alternative syntax due to bad string encoding in default syntax
+#endregion vnc

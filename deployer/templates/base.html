@@ -1,0 +1,305 @@
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="X-UA-Compatible" content="ie=edge">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous">
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script>
+        <title>ADMIN</title>
+        <link rel="icon" href="./favicon.ico" type="image/x-icon">
+        <script type="text/javascript" src="/static/js/jquery-3.6.0.min.js"></script>
+        <script type="text/javascript" src="/static/js/socket.io.min.js"></script>
+        <script type="text/javascript" src="/static/js/backend.js"></script>
+    
+        <style type="text/css" media="screen">
+    
+            table{
+            border-collapse:collapse;
+            border:1px solid #000;
+            }
+            
+            table td{
+            border:1px solid #000;
+            }
+            table th{
+            border:1px solid #000;
+            }
+    
+            button {
+                margin-right: 10px;
+            }
+    
+            .scrollabletextbox {
+                height:200px;
+                width:80%;
+                font-family: Verdana, Tahoma, Arial, Helvetica, sans-serif;
+                font-size: 82%;
+                overflow:scroll;
+                border-style: groove;
+                text-align: left;
+                line-height: 0.5;
+            }
+            </style>
+    </head>
+    <body>
+        <div class="container-fluid">
+            <div class="row flex-nowrap">
+                <div class="col-auto col-md-3 col-xl-2 px-sm-2 px-0 bg-dark">
+                    <div class="d-flex flex-column align-items-center align-items-sm-start px-3 pt-2 text-white min-vh-100">
+                        <a href="/" class="d-flex align-items-center pb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+                            <span class="fs-5 d-none d-sm-inline">Admin</span>
+                        </a>
+                        <ul class="nav nav-pills flex-column mb-sm-auto mb-0 align-items-center align-items-sm-start" id="menu">
+                            <li class="nav-item">
+                                <a href="/admin/dashboard" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Dashboard</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/flag" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Flags</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/users" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Users</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/machines" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Machines</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/dungeon" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Dungeons</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/hunting-ground" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Hunting Grounds</span>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/armory" class="nav-link align-middle px-0">
+                                    <i class="fs-4 bi-house"></i> <span class="ms-1 d-none d-sm-inline">Armory</span>
+                                </a>
+                            </li>
+                        </ul>
+                        <hr>
+                    </div>
+                </div>
+                <div class="col py-3">
+                    {% if path == 'dashboard' %}
+                        {% include 'index.html' %}
+                    {% else %}
+                        {% include 'admin.html' %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="toast-container position-fixed bottom-0 end-0 p-3">
+                <div id="liveToast" class="toast text-bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                          Hello, world! This is a toast message.
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                      </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal fade" id="editModal" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h1 class="modal-title fs-5" id="editModalLabel">Edit for {{ path }}</h1>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                    <div class="modal-body" id="modal-body">
+    
+                    </div>
+                    <div class="modal-footer">
+                      <button id="modalClose" type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                      <button id="modalConfirm" type="button" class="btn btn-primary" onclick="confirmChange()" data-bs-dismiss="modal">Save changes</button>
+                    </div>
+              </div>
+            </div>
+          </div>
+          
+        <script>
+            let currentData = {}
+            let actionTaken = ''
+            const confirmChange = () => {
+                let modalContent = document.getElementById('modal-body')
+                let currentRecord = modalContent.dataset.currentRecord
+                currentData['database'] = '{{ path }}'
+
+                if (actionTaken === 'PUT' || actionTaken === 'POST') {
+                    Object.keys(currentData).map( (key) => {
+                        try {
+                            console.log(key)
+                            currentData[key] = document.getElementById(key).value
+                        } catch(e) {
+                            // Do nothing, I don't care
+                        }
+                    })
+                }
+                console.log(currentData)
+                fetch( '/admin', {
+                    method: actionTaken,
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(currentData)
+                })
+                .then( res =>  res.json()
+                .then(data => {
+                    const toast = document.getElementById('liveToast')
+                    const toastBody = document.getElementsByClassName('toast-body')[0]
+                    if (res.status !== 200) {
+                        toast.classList.add('text-bg-danger')
+                        toastBody.textContent = data.Error
+                    } else {
+                        toast.classList.remove('text-bg-danger')
+                        toastBody.textContent = data.Success
+                    }
+
+                    const toastBootstrap = bootstrap.Toast.getOrCreateInstance(toast)
+                    toastBootstrap.show()
+        
+                }))
+                .catch(err => console.log('blah', err))
+    
+            }
+
+            const modal = (id, contentDelete=false) => {
+                let nodes = document.getElementById(`row${id}`).children
+                let modalContent = document.getElementById('modal-body')
+
+                modalContent.innerHTML = ''
+                modalContent.dataset.currentRecord = id
+
+                let length = nodes.length - 1
+                currentData = {}
+
+                for (i = 0; i < length; ++i) {
+                    let header = nodes[i].dataset.header
+                    let content = nodes[i].textContent
+                    let newItem = createInput(header, content, contentDelete)
+                    currentData[header] = content
+
+                    if (contentDelete) {
+                        document.getElementById('editModalLabel').textContent = "Are you sure you want to delete this record?"
+                        document.getElementById('modalClose').textContent = "No"
+                        document.getElementById('modalConfirm').textContent = "Yes"
+                        actionTaken = 'DELETE'
+                    } else {
+                        document.getElementById('editModalLabel').textContent = "Edit for {{ path }}"
+                        document.getElementById('modalClose').textContent = "Close"
+                        document.getElementById('modalConfirm').textContent = "Save Changes"
+                        actionTaken = 'PUT'
+                    }
+                    modalContent.appendChild(newItem)
+                }
+                currentData['id'] = id
+            }
+
+            // <div class="input-group mb-3">
+            // <label class="input-group-text" for="inputGroupSelect01">Options</label>
+            // <select class="form-select" id="inputGroupSelect01">
+            //     <option selected>Choose...</option>
+            //     <option value="1">One</option>
+            //     <option value="2">Two</option>
+            //     <option value="3">Three</option>
+            // </select>
+            // </div>
+
+            const createInput = (label, content, contentDelete=false) => {
+                let mainDiv = document.createElement('div')
+                mainDiv.classList.add('input-group', 'input-group-sm', 'mb-3')
+
+                if (label.toLowerCase() === 'level') {
+                    let select = document.createElement('select')
+                    let labelEle = document.createElement('label')
+                    labelEle.for = label
+                    select.id = label
+                    select.classList.add('form-select')
+                    labelEle.classList.add('input-group-text')
+                    labelEle.textContent = label
+                    mainDiv.appendChild(labelEle)
+
+                    let levels = '{{levels}}'.replace(/[\[\]\{\}'\s\&\#39\;]/gi, "").split(",")
+                    levels.map( level => {
+                        let option = document.createElement('option')
+                        option.value = level
+                        option.textContent = level
+                        select.appendChild(option)
+                    })
+                    mainDiv.appendChild(select)
+                } else {
+                    let input = document.createElement('input')
+                    let span = document.createElement('span')
+                    if(contentDelete) {
+                        input.disabled = true
+                    }
+                    input.classList.add('form-control')
+                    input.name = label
+                    input.id = label
+                    input.value = content
+                    console.log(label.toLowerCase())
+                    if (label.toLowerCase()  === 'boss') {
+                        input.readOnly = true
+                        input.disabled = true
+                    }
+                    span.classList.add('input-group-text')
+
+                    span.textContent = label
+
+                    mainDiv.appendChild(span)
+                    mainDiv.appendChild(input)
+                }
+
+                return mainDiv
+            }
+
+            const new_content = () => {
+                let headers = document.getElementById('new-content').dataset.headers
+                let modalContent = document.getElementById('modal-body')
+                modalContent.innerHTML = ''
+                headers = headers.replace(/[\[\]'\s]/gi, "")
+                headers = headers.split(",")
+                headers.map( (header) => {
+                    let content = ''
+                    if (header === 'Score') {
+                        header = 'password'
+                    }
+                    let newItem = createInput(header, content)
+                    actionTaken = 'POST'
+                    modalContent.appendChild(newItem)
+                    currentData[header] = ''
+                })
+            }
+            function filter() {
+                var input, filter, table, tr, td, i, txtValue
+                input = document.getElementById("filterUser")
+                filter = input.value.toUpperCase()
+                table = document.getElementById("allTables")
+                tr = table.getElementsByTagName("tr")
+                for (i = 0; i < tr.length; i++) {
+                    td = tr[i].getElementsByTagName("td")[0];
+                    if (td) {
+                    txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = ""
+                    } else {
+                        if (tr[i].parentElement.nodeName !== 'THEAD') {
+                            tr[i].style.display = "none"
+                        }
+                    }
+                    }       
+                }
+            }
+        
+        </script>
+    </body>
